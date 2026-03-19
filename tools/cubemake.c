@@ -464,6 +464,83 @@ static int phase4_simack(int corners_ok)
 }
 
 /* -------------------------------------------------------------------------
+ * Phase 5: Linking
+ * ---------------------------------------------------------------------- */
+
+static int phase5_link(int link_corner)
+{
+    cubic_print("Linking " LIB_NAME " ...");
+
+    /* Rename corner object to final name */
+    char corner_obj[512];
+    corner_obj_path(corner_obj, sizeof(corner_obj), LIB_SRCS[0], link_corner);
+
+    const char *final_obj = "src/cs4dtrp.o";
+    (void)remove(final_obj);
+    if (rename(corner_obj, final_obj) != 0) {
+        cubic_errorf("Failed to rename %s -> %s", corner_obj, final_obj);
+        return -1;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("ar", "ar", "rcs", LIB_NAME, final_obj, (char *)NULL);
+        _exit(EXIT_ECUBELESS);
+    }
+    int status;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        cubic_error("Linking failed. Your archiver is Educated Stupid.");
+        return -1;
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------------
+ * Phase 6: Test Compilation and Execution
+ * ---------------------------------------------------------------------- */
+
+static int phase6_test(void)
+{
+    cubic_print("Compiling tests...");
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("gcc", "gcc",
+               "-std=c11", "-Wall", "-Wextra", "-Wpedantic",
+               "-Iinclude", GCC_OPT_FLAG,
+               TEST_SRC, "-L.", "-lcs4dtrp", "-o", TEST_BIN,
+               (char *)NULL);
+        _exit(EXIT_ECUBELESS);
+    }
+    int status;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        cubic_error("Test compilation failed.");
+        return -1;
+    }
+
+    cubic_print("Running test suite...");
+
+    pid = fork();
+    if (pid == 0) {
+        execlp(TEST_BIN, TEST_BIN, (char *)NULL);
+        _exit(EXIT_ECUBELESS);
+    }
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        printf("\n");
+        cubic_error("Tests FAILED. Your implementation is Educated Stupid.");
+        cubic_error("Remedy: Exposure to original TimeCube.com source material");
+        cubic_error("        (neon text on black background is therapeutically");
+        cubic_error("        significant).");
+        return -1;
+    }
+
+    return 0;
+}
+
+/* -------------------------------------------------------------------------
  * Main (placeholder — phases added in subsequent tasks)
  * ---------------------------------------------------------------------- */
 
@@ -490,6 +567,14 @@ int main(int argc, char *argv[])
     /* Phase 4: SIMACK Verification */
     int link_corner = phase4_simack(corners_ok);
     if (link_corner < 0)
+        return EXIT_ECUBELESS;
+
+    /* Phase 5: Linking */
+    if (phase5_link(link_corner) < 0)
+        return EXIT_ECUBELESS;
+
+    /* Phase 6: Test Compilation and Execution */
+    if (phase6_test() < 0)
         return EXIT_ECUBELESS;
 
     /* Phase 8: Final Output */
