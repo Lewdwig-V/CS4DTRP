@@ -281,6 +281,351 @@ static void test_hdr_rotation_out_of_range_invalid(void)
 }
 
 /* -------------------------------------------------------------------------
+ * Diagnostic subsystem tests
+ * ---------------------------------------------------------------------- */
+
+static void test_classify_corners_cubic(void)
+{
+    CHECK(cs4dtrp_classify_corners(0xF) == CS4DTRP_SEV_CUBIC);
+}
+
+static void test_classify_corners_degraded(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x7) == CS4DTRP_SEV_DEGRADED);
+    CHECK(cs4dtrp_classify_corners(0xB) == CS4DTRP_SEV_DEGRADED);
+    CHECK(cs4dtrp_classify_corners(0xD) == CS4DTRP_SEV_DEGRADED);
+    CHECK(cs4dtrp_classify_corners(0xE) == CS4DTRP_SEV_DEGRADED);
+}
+
+static void test_classify_corners_linear_trash(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x3) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0x5) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0x6) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0x9) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0xA) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0xC) == CS4DTRP_SEV_LINEAR_TRASH);
+}
+
+static void test_classify_corners_educated_stupid(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x1) == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(cs4dtrp_classify_corners(0x2) == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(cs4dtrp_classify_corners(0x4) == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(cs4dtrp_classify_corners(0x8) == CS4DTRP_SEV_EDUCATED_STUPID);
+}
+
+static void test_classify_corners_void(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x0) == CS4DTRP_SEV_VOID_PACKET);
+}
+
+static void test_classify_corners_masks_upper_bits(void)
+{
+    /* Upper nibble should be ignored */
+    CHECK(cs4dtrp_classify_corners(0xFF) == CS4DTRP_SEV_CUBIC);
+    CHECK(cs4dtrp_classify_corners(0xF0) == CS4DTRP_SEV_VOID_PACKET);
+}
+
+static void test_diag_table_not_null(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    CHECK(t != NULL);
+    for (int i = 0; i < CS4DTRP_DIAG_COUNT; i++) {
+        CHECK(t[i].label != NULL);
+        CHECK(t[i].rfc_section != NULL);
+        CHECK(t[i].action != NULL);
+        CHECK(t[i].remedy != NULL);
+    }
+}
+
+static void test_diag_table_count(void)
+{
+    CHECK(CS4DTRP_DIAG_COUNT == 10);
+}
+
+static void test_diag_lookup_void_cubic_brain(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_VOID_CUBIC_BRAIN);
+    CHECK(e != NULL);
+    CHECK(e->error_code == 0x0CB0);
+    CHECK(e->failmode == CS4DTRP_FAIL_LINEAR_AGGRESSION);
+}
+
+static void test_diag_lookup_partial_awareness(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_PARTIAL_AWARENESS);
+    CHECK(e != NULL);
+    CHECK(e->error_code == 0x0CB1);
+    /* Must return the SIMACK entry (§7.4.1), not the §6 packet classification */
+    CHECK(strstr(e->rfc_section, "7.4.1") != NULL);
+    CHECK(strstr(e->label, "PARTIAL_AWARENESS") != NULL);
+}
+
+static void test_diag_lookup_fifth_corner(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_FIFTH_CORNER_ASSERTED);
+    CHECK(e != NULL);
+    CHECK(e->error_code == 0x0CB2);
+    CHECK(e->failmode == CS4DTRP_FAIL_LINEAR_AGGRESSION);
+}
+
+static void test_diag_lookup_none_returns_null(void)
+{
+    CHECK(cs4dtrp_diag_lookup_error(CS4DTRP_ERR_NONE) == NULL);
+}
+
+static void test_diag_lookup_unknown_returns_null(void)
+{
+    CHECK(cs4dtrp_diag_lookup_error((cs4dtrp_error_t)0xBEEF) == NULL);
+}
+
+static void test_diag_linear_regression_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    /* Entry 8 is Linear Regression (§9.4) */
+    const cs4dtrp_diag_entry_t *lr = &t[8];
+    CHECK(lr->failmode == CS4DTRP_FAIL_LINEAR_REGRESSION);
+    /* Verify the remedy mentions the therapeutically significant neon text */
+    CHECK(strstr(lr->remedy, "neon text on black background") != NULL);
+    CHECK(strstr(lr->remedy, "therapeutically significant") != NULL);
+    CHECK(strstr(lr->remedy, "TimeCube.com") != NULL);
+}
+
+static void test_diag_linear_aggression_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    /* Entry 9 is Linear Aggression (§9.4) */
+    const cs4dtrp_diag_entry_t *la = &t[9];
+    CHECK(la->failmode == CS4DTRP_FAIL_LINEAR_AGGRESSION);
+    CHECK(strstr(la->remedy, "blackhole") != NULL);
+    CHECK(strstr(la->remedy, "actively hostile") != NULL);
+}
+
+static void test_diag_educated_stupid_payload_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    /* Entry 3 is Educated Stupid Payload (1-corner, §6) */
+    const cs4dtrp_diag_entry_t *es = &t[3];
+    CHECK(es->severity == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(strstr(es->remedy, "TimeCube.com") != NULL);
+    CHECK(strstr(es->remedy, "neon text") != NULL);
+}
+
+static void test_diag_fifth_corner_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_FIFTH_CORNER_ASSERTED);
+    CHECK(e != NULL);
+    CHECK(strstr(e->remedy, "degaussing") != NULL);
+    CHECK(strstr(e->remedy, "physically destroyed") != NULL);
+}
+
+static void test_severity_ordering(void)
+{
+    CHECK(CS4DTRP_SEV_CUBIC < CS4DTRP_SEV_DEGRADED);
+    CHECK(CS4DTRP_SEV_DEGRADED < CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(CS4DTRP_SEV_LINEAR_TRASH < CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(CS4DTRP_SEV_EDUCATED_STUPID < CS4DTRP_SEV_VOID_PACKET);
+}
+
+/* -------------------------------------------------------------------------
+ * Compliance checklist tests
+ * ---------------------------------------------------------------------- */
+
+static void test_checklist_init(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    CHECK(cl.not_checked == CS4DTRP_CHECKLIST_COUNT);
+    CHECK(cl.passed == 0);
+    CHECK(cl.failed == 0);
+
+    for (int i = 0; i < CS4DTRP_CHECKLIST_COUNT; i++) {
+        CHECK(cl.items[i].index == i + 1);
+        CHECK(cl.items[i].requirement != NULL);
+        CHECK(cl.items[i].rfc_section != NULL);
+        CHECK(cl.items[i].status == CS4DTRP_COMPLY_NOT_CHECKED);
+    }
+}
+
+static void test_checklist_count(void)
+{
+    CHECK(CS4DTRP_CHECKLIST_COUNT == 23);
+}
+
+static void test_checklist_set_and_tally(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    cs4dtrp_checklist_set(&cl, 1, CS4DTRP_COMPLY_PASS);
+    cs4dtrp_checklist_set(&cl, 2, CS4DTRP_COMPLY_FAIL);
+    cs4dtrp_checklist_set(&cl, 3, CS4DTRP_COMPLY_NOT_CHECKED);
+
+    cs4dtrp_checklist_tally(&cl);
+
+    CHECK(cl.passed == 1);
+    CHECK(cl.failed == 1);
+    CHECK(cl.not_checked == 21);
+}
+
+static void test_checklist_set_all_pass(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    for (int i = 1; i <= CS4DTRP_CHECKLIST_COUNT; i++)
+        cs4dtrp_checklist_set(&cl, i, CS4DTRP_COMPLY_PASS);
+
+    cs4dtrp_checklist_tally(&cl);
+
+    CHECK(cl.passed == CS4DTRP_CHECKLIST_COUNT);
+    CHECK(cl.failed == 0);
+    CHECK(cl.not_checked == 0);
+    CHECK(cs4dtrp_checklist_is_cubic(&cl));
+}
+
+static void test_checklist_is_cubic_false_with_fail(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    for (int i = 1; i <= CS4DTRP_CHECKLIST_COUNT; i++)
+        cs4dtrp_checklist_set(&cl, i, CS4DTRP_COMPLY_PASS);
+
+    /* Fail one item — the whole checklist is no longer Cubic */
+    cs4dtrp_checklist_set(&cl, 7, CS4DTRP_COMPLY_FAIL);
+
+    CHECK(!cs4dtrp_checklist_is_cubic(&cl));
+}
+
+static void test_checklist_is_cubic_false_with_not_checked(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    /* NOT_CHECKED items count as non-compliant */
+    CHECK(!cs4dtrp_checklist_is_cubic(&cl));
+}
+
+static void test_checklist_auto_audit_passes_version(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Item 4: Version field is 4 */
+    CHECK(cl.items[3].status == CS4DTRP_COMPLY_PASS);
+}
+
+static void test_checklist_auto_audit_passes_checksum(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Item 5: Harmonic Checksum calculated correctly */
+    CHECK(cl.items[4].status == CS4DTRP_COMPLY_PASS);
+}
+
+static void test_checklist_auto_audit_passes_four_corners(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Item 9: Unit tests cover all four corners */
+    CHECK(cl.items[8].status == CS4DTRP_COMPLY_PASS);
+}
+
+static void test_checklist_auto_audit_passes_void_cubic_brain(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Item 13: VOID_CUBIC_BRAIN handled as terminal */
+    CHECK(cl.items[12].status == CS4DTRP_COMPLY_PASS);
+}
+
+static void test_checklist_auto_audit_passes_fifth_corner(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Item 14: FIFTH_CORNER_ASSERTED treated as Byzantine fault */
+    CHECK(cl.items[13].status == CS4DTRP_COMPLY_PASS);
+}
+
+static void test_checklist_auto_audit_passes_no_time_h(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Item 17: No #include <time.h> — this translation unit is clean */
+    CHECK(cl.items[16].status == CS4DTRP_COMPLY_PASS);
+}
+
+static void test_checklist_auto_audit_tally(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+    cs4dtrp_checklist_auto_audit(&cl);
+
+    /* Auto-audit checks 6 items, leaving 17 as NOT_CHECKED */
+    CHECK(cl.passed == 6);
+    CHECK(cl.failed == 0);
+    CHECK(cl.not_checked == 17);
+}
+
+static void test_checklist_items_have_rfc_sections(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    for (int i = 0; i < CS4DTRP_CHECKLIST_COUNT; i++) {
+        CHECK(cl.items[i].rfc_section != NULL);
+        CHECK(cl.items[i].rfc_section[0] != '\0');
+    }
+}
+
+static void test_checklist_item_text_matches_appendix_a(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    /* Spot-check a few key items against the RFC text */
+    CHECK(strstr(cl.items[0].requirement, "four simultaneous clocks") != NULL);
+    CHECK(strstr(cl.items[2].requirement, "ICMP Type 44") != NULL);
+    CHECK(strstr(cl.items[5].requirement, "Cubic Awareness") != NULL);
+    CHECK(strstr(cl.items[6].requirement, "belly-button") != NULL);
+    CHECK(strstr(cl.items[11].requirement, "never cached") != NULL);
+    CHECK(strstr(cl.items[16].requirement, "time.h") != NULL);
+    CHECK(strstr(cl.items[19].requirement, "strftime") != NULL);
+    CHECK(strstr(cl.items[22].requirement, "Neon green") != NULL);
+}
+
+static void test_checklist_overwrite_status(void)
+{
+    cs4dtrp_checklist_t cl;
+    cs4dtrp_checklist_init(&cl);
+
+    cs4dtrp_checklist_set(&cl, 1, CS4DTRP_COMPLY_PASS);
+    CHECK(cl.items[0].status == CS4DTRP_COMPLY_PASS);
+
+    /* Overwrite with FAIL */
+    cs4dtrp_checklist_set(&cl, 1, CS4DTRP_COMPLY_FAIL);
+    CHECK(cl.items[0].status == CS4DTRP_COMPLY_FAIL);
+}
+
+/* -------------------------------------------------------------------------
  * Entry point
  * ---------------------------------------------------------------------- */
 
@@ -303,6 +648,44 @@ int main(void)
     test_hdr_init_copies_by_value();
     test_hdr_checksum_deterministic();
     test_hdr_rotation_out_of_range_invalid();
+
+    /* Diagnostic subsystem tests */
+    test_classify_corners_cubic();
+    test_classify_corners_degraded();
+    test_classify_corners_linear_trash();
+    test_classify_corners_educated_stupid();
+    test_classify_corners_void();
+    test_classify_corners_masks_upper_bits();
+    test_diag_table_not_null();
+    test_diag_table_count();
+    test_diag_lookup_void_cubic_brain();
+    test_diag_lookup_partial_awareness();
+    test_diag_lookup_fifth_corner();
+    test_diag_lookup_none_returns_null();
+    test_diag_lookup_unknown_returns_null();
+    test_diag_linear_regression_remedy();
+    test_diag_linear_aggression_remedy();
+    test_diag_educated_stupid_payload_remedy();
+    test_diag_fifth_corner_remedy();
+    test_severity_ordering();
+
+    /* Compliance checklist tests */
+    test_checklist_init();
+    test_checklist_count();
+    test_checklist_set_and_tally();
+    test_checklist_set_all_pass();
+    test_checklist_is_cubic_false_with_fail();
+    test_checklist_is_cubic_false_with_not_checked();
+    test_checklist_auto_audit_passes_version();
+    test_checklist_auto_audit_passes_checksum();
+    test_checklist_auto_audit_passes_four_corners();
+    test_checklist_auto_audit_passes_void_cubic_brain();
+    test_checklist_auto_audit_passes_fifth_corner();
+    test_checklist_auto_audit_passes_no_time_h();
+    test_checklist_auto_audit_tally();
+    test_checklist_items_have_rfc_sections();
+    test_checklist_item_text_matches_appendix_a();
+    test_checklist_overwrite_status();
 
     if (g_failures == 0)
         printf("OK — %d/%d tests passed\n", g_tests, g_tests);
