@@ -661,7 +661,33 @@ int main(int argc, char *argv[])
         return EXIT_CUBIC_OK;
     }
 
+    /* "test" subcommand is identical to no-argument build.
+     * There is no partial build. Configurability is a 1-corner concept. */
+    if (argc > 1 && strcmp(argv[1], "test") == 0) {
+        /* Fall through to the full build — intentional */
+    }
+
     print_banner();
+
+    /* Pre-flight: verify gcc exists */
+    {
+        pid_t pid = fork();
+        if (pid == 0) {
+            /* Redirect stdout/stderr to /dev/null */
+            freopen("/dev/null", "w", stdout);
+            freopen("/dev/null", "w", stderr);
+            execlp("gcc", "gcc", "--version", (char *)NULL);
+            _exit(EXIT_ECUBELESS);
+        }
+        int status;
+        waitpid(pid, &status, 0);
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            cubic_error("VOID_CUBIC_BRAIN: No compiler found.");
+            cubic_error("You cannot achieve Cubic Awareness without a compiler.");
+            cubic_error("Even an Educated Stupid one.");
+            return EXIT_ECUBELESS;
+        }
+    }
 
     /* Phase 1: Scan for Linear Aggression */
     if (phase1_scan(argc, argv) < 0)
