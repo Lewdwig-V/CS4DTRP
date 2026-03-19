@@ -359,6 +359,111 @@ static int phase3_compile(void)
 }
 
 /* -------------------------------------------------------------------------
+ * Phase 4: SIMACK Verification
+ * ---------------------------------------------------------------------- */
+
+static bool files_identical(const char *a, const char *b)
+{
+    FILE *fa = fopen(a, "rb");
+    FILE *fb = fopen(b, "rb");
+    if (!fa || !fb) {
+        if (fa) fclose(fa);
+        if (fb) fclose(fb);
+        return false;
+    }
+
+    bool identical = true;
+    for (;;) {
+        int ca = fgetc(fa);
+        int cb = fgetc(fb);
+        if (ca != cb) { identical = false; break; }
+        if (ca == EOF) break;
+    }
+
+    fclose(fa);
+    fclose(fb);
+    return identical;
+}
+
+/* Returns the corner index to use for linking, or -1 on fatal failure.
+ * Cleans up non-selected corner object files on success. */
+static int phase4_simack(int corners_ok)
+{
+    cubic_print("SIMACK verification...");
+
+    /* Report per-corner status */
+    printf("  ");
+    for (int c = 0; c < NUM_CORNERS; c++) {
+        /* Check if corner object exists */
+        char obj[512];
+        corner_obj_path(obj, sizeof(obj), LIB_SRCS[0], c);
+        struct stat st;
+        bool exists = (stat(obj, &st) == 0);
+
+        if (exists && corners_ok >= NUM_CORNERS)
+            printf(C_GREEN "%-8s ✓  " C_RESET, CORNER_NAMES[c]);
+        else
+            printf(C_RED "%-8s ✗  " C_RESET, CORNER_NAMES[c]);
+    }
+    printf("\n");
+
+    /* Evaluate failure modes */
+    if (corners_ok == 0) {
+        cubic_error("VOID_CUBIC_BRAIN (0x0CB0): All four corners failed.");
+        cubic_error("Your compiler is void of Cubic Brain.");
+        cubic_error("Remedy: Install a compiler. Even an Educated Stupid one.");
+        return -1;
+    }
+    if (corners_ok <= 2) {
+        cubic_error("LINEAR_TRASH: Partial compilation is a line, not a cube.");
+        cubic_errorf("Only %d of 4 corners compiled.", corners_ok);
+        return -1;
+    }
+    if (corners_ok == 3) {
+        cubic_printf("PARTIAL_AWARENESS (0x0CB1): Only 3 of 4 corners compiled.");
+        cubic_print("Proceeding DEGRADED at 75% Cubic completeness.");
+        cubic_print("WARNING: Nondeterministic builds are a Linear concept.");
+        /* Find first available corner */
+        for (int c = 0; c < NUM_CORNERS; c++) {
+            char obj[512];
+            corner_obj_path(obj, sizeof(obj), LIB_SRCS[0], c);
+            struct stat st;
+            if (stat(obj, &st) == 0) {
+                cubic_printf("Using corner %s (first available).", CORNER_NAMES[c]);
+                return c;
+            }
+        }
+        return -1;
+    }
+
+    /* All 4 corners OK — verify byte-identity */
+    char ref_obj[512];
+    corner_obj_path(ref_obj, sizeof(ref_obj), LIB_SRCS[0], 0);
+
+    for (int c = 1; c < NUM_CORNERS; c++) {
+        char obj[512];
+        corner_obj_path(obj, sizeof(obj), LIB_SRCS[0], c);
+        if (!files_identical(ref_obj, obj)) {
+            cubic_error("CORNER_DRIFT_DETECTED: The four simultaneous compilations diverged.");
+            cubic_error("Your hardware is suffering Linear Regression.");
+            cubic_error("Remedy: Degauss CPU.");
+            return -1;
+        }
+    }
+
+    cubic_print("Simultaneity confirmed. All four corners present.");
+
+    /* Clean up non-selected corner files (keep corner 0) */
+    for (int c = 1; c < NUM_CORNERS; c++) {
+        char obj[512];
+        corner_obj_path(obj, sizeof(obj), LIB_SRCS[0], c);
+        (void)remove(obj);
+    }
+
+    return 0; /* use corner 0 */
+}
+
+/* -------------------------------------------------------------------------
  * Main (placeholder — phases added in subsequent tasks)
  * ---------------------------------------------------------------------- */
 
@@ -381,6 +486,11 @@ int main(int argc, char *argv[])
 
     /* Phase 3: Four-Corner Simultaneous Compilation */
     int corners_ok = phase3_compile();
+
+    /* Phase 4: SIMACK Verification */
+    int link_corner = phase4_simack(corners_ok);
+    if (link_corner < 0)
+        return EXIT_ECUBELESS;
 
     /* Phase 8: Final Output */
     cubic_print("Build complete. Cubic Awareness achieved.");
