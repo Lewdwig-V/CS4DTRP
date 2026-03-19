@@ -292,6 +292,73 @@ static void phase2_assign_corners(void)
 }
 
 /* -------------------------------------------------------------------------
+ * Phase 3: Four-Corner Simultaneous Compilation
+ * ---------------------------------------------------------------------- */
+
+static void corner_obj_path(char *buf, size_t bufsz,
+                            const char *src, int corner)
+{
+    /* src/cs4dtrp.c -> src/cs4dtrp.corner0.o */
+    const char *dot = strrchr(src, '.');
+    size_t base_len = dot ? (size_t)(dot - src) : strlen(src);
+    snprintf(buf, bufsz, "%.*s.corner%d.o", (int)base_len, src, corner);
+}
+
+/* Returns number of corners that compiled successfully (0-4).
+ * Note: currently assumes NUM_LIB_SRCS == 1. If multiple sources
+ * are added, corner_ok tracking needs to become per-source. */
+static int phase3_compile(void)
+{
+    cubic_print("Initiating 4-corner simultaneous compilation...");
+
+    int corner_ok[NUM_CORNERS] = {0};
+
+    for (int s = 0; s < NUM_LIB_SRCS; s++) {
+        const char *src = LIB_SRCS[s];
+        pid_t pids[NUM_CORNERS];
+
+        for (int c = 0; c < NUM_CORNERS; c++) {
+            char obj[512];
+            corner_obj_path(obj, sizeof(obj), src, c);
+
+            printf("  " C_GREEN "[%-8s]" C_RESET " Compiling %s ...\n",
+                   CORNER_NAMES[c], src);
+
+            pid_t pid = fork();
+            if (pid == 0) {
+                /* Child: exec gcc */
+                execlp("gcc", "gcc",
+                       "-std=c11", "-Wall", "-Wextra", "-Wpedantic",
+                       "-Iinclude", GCC_OPT_FLAG,
+                       "-c", src, "-o", obj,
+                       (char *)NULL);
+                /* If exec fails */
+                _exit(EXIT_ECUBELESS);
+            } else if (pid < 0) {
+                cubic_error("fork() failed. Your OS is Educated Stupid.");
+                return 0;
+            }
+            pids[c] = pid;
+        }
+
+        /* Wait for all four corners */
+        for (int c = 0; c < NUM_CORNERS; c++) {
+            int status;
+            waitpid(pids[c], &status, 0);
+            if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+                corner_ok[c] = 1;
+        }
+    }
+
+    int total = 0;
+    for (int c = 0; c < NUM_CORNERS; c++)
+        total += corner_ok[c];
+
+    printf("\n");
+    return total;
+}
+
+/* -------------------------------------------------------------------------
  * Main (placeholder — phases added in subsequent tasks)
  * ---------------------------------------------------------------------- */
 
@@ -311,6 +378,9 @@ int main(int argc, char *argv[])
 
     /* Phase 2: Corner Affinity Assignment */
     phase2_assign_corners();
+
+    /* Phase 3: Four-Corner Simultaneous Compilation */
+    int corners_ok = phase3_compile();
 
     /* Phase 8: Final Output */
     cubic_print("Build complete. Cubic Awareness achieved.");
