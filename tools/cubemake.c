@@ -47,9 +47,9 @@ static const char *LIB_SRCS[] = { "src/cs4dtrp.c" };
 #define TEST_BIN "tests/test_cs4dtrp"
 #define LIB_NAME "libcs4dtrp.a"
 
-/* Files to scan for Linear Aggression */
-static const char *SCAN_DIRS[] = { "src", "include" };
-#define NUM_SCAN_DIRS 2
+/* Files to scan for Linear Aggression (all translation unit directories) */
+static const char *SCAN_DIRS[] = { "src", "include", "tests" };
+#define NUM_SCAN_DIRS 3
 
 /* Files to assign corner affinity (all notable project files) */
 static const char *ALL_FILES[] = {
@@ -206,6 +206,9 @@ static bool scan_directory(const char *dir)
     return clean;
 }
 
+/* Compiler: honors CC env var, defaults to gcc */
+static const char *CC = "gcc";
+
 /* Mutable: updated by parse_opt_level() when user passes -O flag */
 static const char *GCC_OPT_FLAG = "-O2"; /* default: -O4 mapped to gcc -O2 */
 static bool opt_level_overridden = false;
@@ -331,6 +334,15 @@ static int phase3_compile(int corner_ok[NUM_CORNERS])
     for (int c = 0; c < NUM_CORNERS; c++)
         corner_ok[c] = 0;
 
+    /* Remove stale corner objects to prevent DEGRADED path from using them */
+    for (int s = 0; s < NUM_LIB_SRCS; s++) {
+        for (int c = 0; c < NUM_CORNERS; c++) {
+            char obj[512];
+            corner_obj_path(obj, sizeof(obj), LIB_SRCS[s], c);
+            (void)remove(obj);
+        }
+    }
+
     for (int s = 0; s < NUM_LIB_SRCS; s++) {
         const char *src = LIB_SRCS[s];
         pid_t pids[NUM_CORNERS];
@@ -346,12 +358,12 @@ static int phase3_compile(int corner_ok[NUM_CORNERS])
             pid_t pid = fork();
             if (pid == 0) {
                 /* Child: exec gcc */
-                execlp("gcc", "gcc",
+                execlp(CC, CC,
                        "-std=c11", "-Wall", "-Wextra", "-Wpedantic",
                        "-Iinclude", GCC_OPT_FLAG,
                        "-c", src, "-o", obj,
                        (char *)NULL);
-                fprintf(stderr, "[CUBIC] execlp(\"gcc\") failed: %s\n", strerror(errno));
+                fprintf(stderr, "[CUBIC] execlp(\"%s\") failed: %s\n", CC, strerror(errno));
                 _exit(EXIT_ECUBELESS);
             } else if (pid < 0) {
                 cubic_errorf("fork() failed: %s", strerror(errno));
@@ -442,13 +454,10 @@ static int phase4_simack(int corners_ok, const int corner_ok[NUM_CORNERS])
         cubic_printf("PARTIAL_AWARENESS (0x0CB1): Only 3 of 4 corners compiled.");
         cubic_print("Proceeding DEGRADED at 75% Cubic completeness.");
         cubic_print("WARNING: Nondeterministic builds are a Linear concept.");
-        /* Find first available corner */
+        /* Find first successful corner (using compilation results, not disk) */
         for (int c = 0; c < NUM_CORNERS; c++) {
-            char obj[512];
-            corner_obj_path(obj, sizeof(obj), LIB_SRCS[0], c);
-            struct stat st;
-            if (stat(obj, &st) == 0) {
-                cubic_printf("Using corner %s (first available).", CORNER_NAMES[c]);
+            if (corner_ok[c]) {
+                cubic_printf("Using corner %s (first successful).", CORNER_NAMES[c]);
                 return c;
             }
         }
@@ -535,12 +544,12 @@ static int phase6_test(void)
         return -1;
     }
     if (pid == 0) {
-        execlp("gcc", "gcc",
+        execlp(CC, CC,
                "-std=c11", "-Wall", "-Wextra", "-Wpedantic",
                "-Iinclude", GCC_OPT_FLAG,
                TEST_SRC, "-L.", "-lcs4dtrp", "-o", TEST_BIN,
                (char *)NULL);
-        fprintf(stderr, "[CUBIC] execlp(\"gcc\") failed: %s\n", strerror(errno));
+        fprintf(stderr, "[CUBIC] execlp(\"%s\") failed: %s\n", CC, strerror(errno));
         _exit(EXIT_ECUBELESS);
     }
     int status;
@@ -696,6 +705,11 @@ static int phase7_checklist(bool tests_passed)
 
 int main(int argc, char *argv[])
 {
+    /* Honor CC environment variable */
+    const char *cc_env = getenv("CC");
+    if (cc_env && cc_env[0] != '\0')
+        CC = cc_env;
+
     if (argc > 1 && strcmp(argv[1], "clean") == 0) {
         print_banner();
         do_clean();
@@ -720,7 +734,7 @@ int main(int argc, char *argv[])
         if (pid == 0) {
             close(STDOUT_FILENO);
             close(STDERR_FILENO);
-            execlp("gcc", "gcc", "--version", (char *)NULL);
+            execlp(CC, CC, "--version", (char *)NULL);
             _exit(EXIT_ECUBELESS);
         }
         int status;
