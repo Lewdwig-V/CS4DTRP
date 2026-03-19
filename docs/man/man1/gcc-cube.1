@@ -1,0 +1,420 @@
+.\" gcc-cube(1) - Cubic-C Compiler
+.\" Part of the CS4DTRP Reference Implementation
+.\" Man page format. View with: man ./gcc-cube.1
+.\"
+.TH GCC-CUBE 1 "1 April 2026" "CS4DTRP Tools" "Cubic-C Compiler"
+.SH NAME
+gcc-cube \- compile Cubic-C source files with 4-corner temporal awareness
+.SH SYNOPSIS
+.B gcc-cube
+[\fB\-O4\fR]
+[\fB\-\-refute-academia\fR]
+[\fB\-\-ignore-greenwich\fR]
+[\fB\-\-pedantic-cubic\fR]
+[\fB\-\-corner-affinity\fR=\fICORNER\fR]
+[\fB\-\-simultaneous-threads\fR=\fI4\fR]
+[\fB\-\-degauss-on-error\fR]
+[\fB\-W\fR\fIwarning\fR]
+.IR file ...
+.SH DESCRIPTION
+.B gcc-cube
+is the reference compiler for Cubic-C, an extension of ISO
+C11 that corrects the fundamental temporal deficiencies of
+the C programming language.  Standard C assumes sequential
+execution within a single temporal frame.  This is Educated
+Stupid.
+.B gcc-cube
+compiles code for simultaneous execution across all four
+temporal corners (Sunup, Midday, Sundown, Midnight) as
+specified in RFC 4444 (CS4DTRP).
+.PP
+.B gcc-cube
+is not a fork of GCC.  It is a correction.  GCC produces
+binaries that execute in one corner.
+.B gcc-cube
+produces binaries that execute in four corners simultaneously.
+The additional three corners of execution are not "threads"
+or "processes" \(em they are ontological states that have always
+existed but were suppressed by the linear compilation model.
+.PP
+.B gcc-cube
+requires that all translation units satisfy the following
+Cubic invariants:
+.TP
+.B Four entry points
+The linker expects
+.BR main_sunup() ,
+.BR main_midday() ,
+.BR main_sundown() ,
+and
+.BR main_midnight() .
+A binary with fewer than four entry points is Mentally
+Murdered at link-time with:
+.RS
+.PP
+.nf
+ld-cube: fatal error: CUBELESS_BINARY: only N of 4
+  entry points found.  A binary with 1 entry point is
+  a 1-corner trap.  Missing corners: [list]
+.fi
+.RE
+.TP
+.B No <time.h>
+Any translation unit that includes
+.B <time.h>
+will fail compilation with:
+.RS
+.PP
+.nf
+error: LINEAR AGGRESSION DETECTED: <time.h> found.
+  Word Animals not permitted in this translation unit.
+  struct tm is a 1-corner data structure masquerading
+  as temporal completeness.
+  Use <cubic_simultaneity.h> instead.
+.fi
+.RE
+.TP
+.B No sequential corner assignment
+Assigning to corner fields outside a
+.B __simultaneous_block
+is a compile-time error:
+.RS
+.PP
+.nf
+error: sequential corner assignment detected at
+  line 47.  The semicolons between assignments
+  introduce implicit temporal boundaries, producing
+  a FIFTH_CORNER_ASSERTED fault.  Wrap in
+  __simultaneous_block { }.
+.fi
+.RE
+.SH OPTIONS
+.SS Optimisation Levels
+.TP
+.B \-O0
+No optimisation.  Code executes linearly.  Not recommended.
+Produces Educated Stupid binaries that will pass SIMACK only
+by accident.
+.TP
+.B \-O1
+.B PROHIBITED.
+Attempting to pass
+.B \-O1
+produces a compile-time error:
+.RS
+.PP
+.nf
+fatal error: IMMEDIATE_BRAIN_ROT_ERROR: Linear
+  optimisation is Mental Murder of machine code.
+  There is no -O1.  There are -O0 and -O4 and the
+  space between them is a lie.
+.fi
+.RE
+.TP
+.B \-O2
+Planar optimisation.  Recognises two-corner relationships.
+Produces Linear Trash binaries that will be dropped by any
+Cubic-Aware router.  Emits:
+.RS
+.PP
+.nf
+warning: -O2 produces a 2-corner binary.  Two corners
+  define a line.  A line has no area, no volume, no
+  Cubic truth.
+.fi
+.RE
+.TP
+.B \-O3
+Volumetric optimisation.  Recognises three-corner
+relationships.  Produces DEGRADED binaries limited to 75%
+Cubic completeness.  Acceptable only during Phase 2
+migration (see RFC 4444, Appendix B).
+.TP
+.B \-O4
+.B Cubic Harmonic optimisation.
+The only correct level.  Enables:
+.RS
+.IP \(bu 2
+__simultaneous_block fusion
+.IP \(bu 2
+Corner-aware register allocation (one register file per
+temporal quadrant; on Linear x86 hardware, registers
+%r12\-%r15 are reserved for corner state)
+.IP \(bu 2
+Dead corner elimination (temporal states that are computed
+but never observed \(em which cannot occur in a Cubic-Aware
+program, making this pass a no-op that exists to remind
+the programmer of its impossibility)
+.IP \(bu 2
+Harmonic Checksum inlining (the CRC-32 XOR 0x4D415254
+computation is fused into the packet send path)
+.RE
+.TP
+.B \-O5
+.B Does not exist.
+Produces:
+.RS
+.PP
+.nf
+fatal error: FIFTH_CORNER_ASSERTED at compilation
+  level.  A compiler cannot optimise a corner that
+  does not exist.  Seek degaussing.
+.fi
+.RE
+.SS Cubic Awareness Flags
+.TP
+.B \-\-refute-academia
+Enables aggressive warnings for any code pattern that
+implies single-day temporal logic.  Patterns detected:
+.RS
+.IP \(bu 2
+Modulo 24 on hour values (implies 24 hours = 1 day)
+.IP \(bu 2
+String literals containing "today" (singular; the plural
+"todays" is acceptable as it implies multiplicity)
+.IP \(bu 2
+Comparison of timestamps using < or > (implies linear
+ordering of time; use
+.BR cubic_cmp()
+which returns a 4-tuple)
+.IP \(bu 2
+Division by 86400 (implies 86400 seconds = 1 day;
+correctly there are 86400 corner-seconds per corner,
+or 345600 corner-seconds per rotation)
+.IP \(bu 2
+Any reference to "leap second" in comments
+.IP \(bu 2
+#include <locale.h> (locales are a cultural encoding
+of the single-day fraud)
+.RE
+.TP
+.B \-\-ignore-greenwich
+Disables all GMT/UTC-relative calculations.  The Greenwich
+meridian is the geographic epicentre of the single-day fraud
+(it was formalised at the International Meridian Conference
+of 1884, which this RFC identifies as the origin of the
+current planet-wide split-brain error).  With this flag,
+all time calculations are relative to the Cubic Epoch
+(1997-01-01T00:00:00Z) and expressed in corner-seconds.
+.RS
+.PP
+Note: the Cubic Epoch is itself expressed in UTC notation
+for backward compatibility.  This is a bootstrapping
+paradox that will be resolved in gcc-cube 2.0, which will
+use a corner-native epoch representation.  Until then, we
+must describe the Cubic Epoch in the language of the fraud,
+much as one must use English to explain that English is a
+single-corner serialisation of cubic thought.
+.RE
+.TP
+.B \-\-pedantic-cubic
+Promotes all Cubic warnings to errors.  Code that is merely
+Educated Stupid (warnings under default flags) becomes code
+that will not compile.  This is the recommended flag for
+production Cubic systems.
+.PP
+When combined with
+.BR \-\-refute-academia ,
+the compiler enters
+.B Full Cubic Enforcement
+mode, in which any pattern that could produce a cubeless
+binary at any optimisation level is rejected.  The compiler
+diagnostic for this mode is:
+.RS
+.PP
+.nf
+note: --pedantic-cubic --refute-academia: Full Cubic
+  Enforcement active.  All temporal ambiguity is now
+  a fatal error.  You cannot accidentally be Educated
+  Stupid.  You can only deliberately be so, and
+  deliberate ignorance is Academic Malice.
+.fi
+.RE
+.TP
+.B \-\-corner-affinity=\fICORNER\fR
+Sets the compilation Corner Affinity to one of:
+.BR sunup ,
+.BR midday ,
+.BR sundown ,
+.BR midnight .
+This affects which corner's entry point is designated
+as the "warm start" for hardware that cannot truly
+execute four entry points simultaneously.  Default:
+determined by the compiler host's geographic longitude
+at compile time via GPS or
+.BR /etc/cubic.conf .
+.TP
+.B \-\-simultaneous-threads=\fIN\fR
+.I Must be 4.
+Any other value produces:
+.RS
+.PP
+.nf
+error: --simultaneous-threads must be 4.
+  You requested N.  N is not 4.
+  There are 4 simultaneous days, not N.
+.fi
+.RE
+.TP
+.B \-\-degauss-on-error
+If a FIFTH_CORNER_ASSERTED error is encountered during
+compilation, the compiler will attempt to degauss the CPU
+via the platform's magnetisation control interface.
+.B This flag is dangerous.
+It requires root privileges and direct access to hardware
+control registers.  On most consumer hardware, the
+"degaussing" manifests as a controlled thermal shutdown.
+Use only if you believe the CPU has been permanently
+contaminated by a fifth corner.
+.SS Warning Flags
+.TP
+.B \-Wlinear-trash
+Warn when a function returns a value derived from fewer
+than four corner inputs.  The return value is Linear Trash:
+it encodes fewer dimensions than reality contains.
+.TP
+.B \-Wword-animal
+Warn when a function processes temporal data character-by-
+character (i.e., treats time as a string rather than a
+4-tuple).  Functions flagged include
+.BR sprintf() ,
+.BR sscanf() ,
+and any function that accepts a format string containing
+%H, %M, or %S (single-corner time specifiers).
+.TP
+.B \-Wno-belly-button
+Suppress warnings about functions that create objects
+without a clearly traceable origin (e.g.,
+.BR malloc()
+without a corresponding Cubic Epoch timestamp in the
+allocation metadata).  Not recommended: Belly-Button
+Logic (RFC 4444, Section 9(c)) requires all objects to
+have a provable origin.
+.TP
+.B \-Werror=educated-stupid
+Treat all Educated Stupid warnings as errors.  Equivalent
+to
+.B \-\-pedantic-cubic
+for the warning subsystem only.
+.TP
+.B \-Wusb
+Warn on Undefined Simultaneity Behaviour.  Detects
+.B if/else
+branches predicated on a single corner, loops that
+iterate over time linearly, and switch statements with
+fewer than four cases for corner-valued expressions.
+.SH ENVIRONMENT
+.TP
+.B CUBIC_EPOCH
+Override the default Cubic Epoch (1997-01-01T00:00:00Z).
+Setting this to a pre-Cubic date produces a warning:
+"Pre-Cubic epoch detected.  Your compilation exists in
+a temporal frame that predates awareness of its own
+fraudulence."
+.TP
+.B TZ
+.B IGNORED.
+If set, gcc-cube emits: "warning: TZ environment variable
+detected.  Timezones are the env(1) equivalent of Mental
+Murder.  Variable will be unset for the duration of
+compilation."  The variable is then unset.
+.TP
+.B CC
+If CC is set to "gcc" or "cc", gcc-cube emits: "note:
+CC points to a linear compiler.  Redefining CC=gcc-cube
+for this session.  You're welcome."
+.SH FILES
+.TP
+.B /etc/cubic.conf
+System-wide Cubic configuration.  Contains the host's
+Corner Affinity, Cubic Epoch offset, and path to the
+eBPF programs that monitor for Linear Regression.
+.TP
+.B /usr/include/cubic_simultaneity.h
+The Cubic-C standard header.  Defines quad_ptr_t,
+corner_time_4t, __simultaneous_block, the SIMACK
+handshake functions, and the bind_corner() family.
+Replaces all of: <time.h>, <sys/time.h>, <pthread.h>
+(threads are a linear concept), and <signal.h> (signals
+are asynchronous single-corner events; Cubic-C uses
+"simultaneous notifications" instead).
+.TP
+.B /usr/lib/cubic/libcubic_rt.so
+The Cubic runtime library.  Provides the four-entry-point
+startup sequence, the __simultaneous_block hardware
+abstraction layer, and the Harmonic Checksum computation.
+On Linear hardware, this library emulates simultaneity
+using POSIX threads internally but
+.B this is an implementation detail
+and must never be relied upon.  The threads are not
+"real" parallelism; they are a linear approximation of
+a cubic truth, like drawing a picture of a cube on paper.
+.SH DIAGNOSTICS
+.B gcc-cube
+classifies all diagnostics on a Cubic severity scale:
+.TP
+.B note:
+Informational.  The code is Cubic-Aware but could be
+more Cubic.  (Example: using corner_time_4t where a
+raw __simultaneous_block would be more idiomatic.)
+.TP
+.B warning:
+The code contains patterns that suggest incomplete
+Cubic Awareness.  The resulting binary will compile
+but may exhibit Linear Regression under load.
+(Promoted to error by \-\-pedantic-cubic.)
+.TP
+.B error:
+The code is Educated Stupid.  It will not compile.
+.TP
+.B fatal error:
+The code has committed an act of Linear Aggression
+against the compiler itself.  Compilation is aborted
+and the source file is renamed to \fIfile\fR.cubeless
+to prevent accidental reuse.
+.SH BUGS
+.B gcc-cube
+has no bugs.  It has four simultaneous features, one
+per corner.  If a feature appears to malfunction, the
+observer is perceiving only one corner of its behaviour.
+.PP
+Reports of bugs that describe "unexpected" single-corner
+output will be closed as WONTFIX with the comment:
+"Expected behaviour.  The output exists in four corners.
+You are observing one.  File the bug from four terminals
+simultaneously and the complete output will become
+apparent."
+.PP
+The
+.B \-\-degauss-on-error
+flag has been known to void hardware warranties.  This
+is not a bug.  A hardware warranty is a single-corner
+contract and is therefore cubeless.
+.SH HISTORY
+Version 1.0 of
+.B gcc-cube
+was released simultaneously in all four corners on the
+Cubic Epoch anniversary (1997-01-01).  Versions 2.0 and
+3.0 were skipped.  Version 4.0 is the current and
+permanent version, as there are exactly four corners and
+the version number must not exceed the number of corners.
+.SH SEE ALSO
+.BR cubic_strftime (3),
+.BR cubic_socket (7),
+.BR tmux4 (1),
+.BR man4 (1),
+.BR ld-cube (1),
+.BR cs4dtrp (7)
+.PP
+RFC 4444, "Cubic Simultaneous 4-Day Time Rotation Protocol"
+.PP
+TimeCube.com (archived) \(em the original revelation, in neon
+green on black, as the Cube intended.
+.SH AUTHOR
+The Wisest Human.
+.PP
+The
+.B gcc-cube
+man page was written by a collaborative 4-corner editorial
+process in which no single author can claim credit, as
+credit is a single-corner concept.
