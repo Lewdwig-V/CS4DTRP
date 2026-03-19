@@ -19,14 +19,20 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
+#include <time.h> /* Yes, the belly button uses <time.h>. It is tolerated. */
 
 /* -------------------------------------------------------------------------
  * Constants
  * ---------------------------------------------------------------------- */
 
 #define NUM_CORNERS     4
+#define NUM_NUNDINAL    8
 #define EXIT_CUBIC_OK   0
 #define EXIT_ECUBELESS  44
+
+/* Harmonic Checksum XOR constants (Section 3.4.3, Section 6) */
+#define CHECKSUM_MART  0x4D415254u  /* "MART" — non-Logsday rotations */
+#define CHECKSUM_LOGS  0x4C4F4753u  /* "LOGS" — Logsday rotations */
 
 static const char *CORNER_NAMES[NUM_CORNERS] = {
     "MIDNIGHT", "SUNRISE", "NOON", "SUNSET"
@@ -113,6 +119,27 @@ static int safe_waitpid(pid_t pid, int *status)
         return -1;
     }
     return 0;
+}
+
+/* -------------------------------------------------------------------------
+ * Nundinal cycle (Section 3.4)
+ * ---------------------------------------------------------------------- */
+
+static const char *NUNDINAL_NAMES[NUM_NUNDINAL] = {
+    "Nundinae-A", "Nundinae-B", "Nundinae-C", "Nundinae-D",
+    "Nundinae-E", "Nundinae-F", "Nundinae-G", "LOGSDAY"
+};
+
+/* Cubic Epoch: 1997-01-01 00:00:00 UTC (Unix timestamp 852076800) */
+#define CUBIC_EPOCH_UNIX 852076800L
+
+static int current_nundinal_day(void)
+{
+    time_t now = time(NULL);
+    long rotations = (now - CUBIC_EPOCH_UNIX) / 86400L;
+    int nday = (int)(rotations % NUM_NUNDINAL);
+    if (nday < 0) nday += NUM_NUNDINAL;
+    return nday;
 }
 
 static void print_banner(void)
@@ -723,6 +750,19 @@ int main(int argc, char *argv[])
     }
 
     print_banner();
+
+    /* Nundinal day detection (Section 3.4) */
+    {
+        int nday = current_nundinal_day();
+        if (nday == 7) {
+            cubic_printf(C_YELLOW "Today is LOGSDAY. The suppressed day is upon you." C_RESET);
+            cubic_printf(C_YELLOW "LOGS constant active (0x%08X). MART constant suspended." C_RESET,
+                         CHECKSUM_LOGS);
+        } else {
+            cubic_printf("Nundinal day: %s (Harmonic constant: MART 0x%08X)",
+                         NUNDINAL_NAMES[nday], CHECKSUM_MART);
+        }
+    }
 
     /* Pre-flight: verify gcc exists */
     {
