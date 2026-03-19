@@ -1,7 +1,8 @@
 # CS4DTRP — Cubic Simultaneous 4-Day Time Rotation Protocol
 
-CC      ?= gcc
-CFLAGS  ?= -std=c11 -Wall -Wextra -Wpedantic -Iinclude
+CC       ?= gcc
+CFLAGS   ?= -std=c11 -Wall -Wextra -Wpedantic
+CPPFLAGS += -Iinclude
 
 LIB_SRC  = src/cs4dtrp.c
 LIB_OBJ  = $(LIB_SRC:.c=.o)
@@ -20,13 +21,13 @@ $(LIB): $(LIB_OBJ)
 	$(AR) rcs $@ $^
 
 src/%.o: src/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 $(TEST_BIN): $(TEST_SRC) $(LIB)
-	$(CC) $(CFLAGS) $< -L. -lcs4dtrp -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -L. -lcs4dtrp -o $@
 
 clean:
 	rm -f $(LIB_OBJ) $(LIB) $(TEST_BIN)

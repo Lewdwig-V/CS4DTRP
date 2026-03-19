@@ -51,9 +51,11 @@ typedef struct {
  * Fields:
  *   src         — Source cubic address.
  *   dst         — Destination cubic address.
- *   rotation    — Current rotation-cycle index (0–3); advances each hop.
+ *   rotation    — Current rotation-cycle index (0–3).
+ *                  Use cs4dtrp_next_rotation() to advance.
  *   payload_len — Length of the payload in bytes.
- *   checksum    — XOR checksum over all header bytes except checksum itself.
+ *   checksum    — XOR checksum over all bytes preceding the checksum field
+ *                  (including any struct padding).
  */
 typedef struct {
     cs4dtrp_addr_t src;
@@ -74,8 +76,8 @@ void cs4dtrp_addr_init(cs4dtrp_addr_t *addr, uint32_t base);
 /*
  * cs4dtrp_addr_rotate — Advance all corner addresses by one rotation step.
  *
- * The value at corner[n] becomes corner[(n+1) % 4], implementing the
- * simultaneous four-day rotation.
+ * After rotation, corner[n] holds the value that was previously in
+ * corner[(n+1) % 4].  The old corner[0] value wraps to corner[3].
  */
 void cs4dtrp_addr_rotate(cs4dtrp_addr_t *addr);
 

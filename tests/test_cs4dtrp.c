@@ -145,8 +145,9 @@ static void test_hdr_tampered_invalid(void)
 
     CHECK(cs4dtrp_hdr_valid(&hdr));
 
-    /* Tamper with the destination corner address using a value whose bytes
-     * do not cancel in the XOR checksum (0xFFFFFFFF would cancel). */
+    /* Flip a single byte in a destination corner address.  A single-byte
+     * change is guaranteed to alter the XOR checksum (a mask like
+     * 0xFFFFFFFF flips four bytes, which can cancel in a byte-level XOR). */
     hdr.dst.corner_addr[2] ^= 0x00000001u;
     CHECK(!cs4dtrp_hdr_valid(&hdr));
 }
@@ -161,8 +162,121 @@ static void test_hdr_payload_overflow_invalid(void)
     cs4dtrp_hdr_init(&hdr, &src, &dst, CS4DTRP_MAX_PAYLOAD, 0);
     CHECK(cs4dtrp_hdr_valid(&hdr));
 
-    /* Exceed the protocol limit; cs4dtrp_hdr_valid checks length first. */
-    hdr.payload_len = (uint16_t)(CS4DTRP_MAX_PAYLOAD + 1u);
+    /*
+     * Manually construct a header with an oversized payload_len but a
+     * correct checksum for that length, isolating the length check from
+     * the checksum check.
+     */
+    cs4dtrp_hdr_t bad;
+    memset(&bad, 0, sizeof(bad));
+    bad.src         = src;
+    bad.dst         = dst;
+    bad.rotation    = 0;
+    bad.payload_len = (uint16_t)(CS4DTRP_MAX_PAYLOAD + 1u);
+    /* Compute a "valid" checksum over the raw bytes so only the length
+     * check can reject it. */
+    {
+        const uint8_t *p   = (const uint8_t *)&bad;
+        size_t         len = (const uint8_t *)&bad.checksum - p;
+        uint8_t        acc = 0;
+        for (size_t i = 0; i < len; i++)
+            acc ^= p[i];
+        bad.checksum = acc;
+    }
+    CHECK(!cs4dtrp_hdr_valid(&bad));
+}
+
+static void test_addr_init_all_ones(void)
+{
+    cs4dtrp_addr_t addr;
+    cs4dtrp_addr_init(&addr, 0xFFFFFFFFu);
+
+    /* rotl32(0xFFFFFFFF, n) == 0xFFFFFFFF for any n */
+    for (int c = 0; c < CS4DTRP_NUM_CORNERS; c++)
+        CHECK(addr.corner_addr[c] == 0xFFFFFFFFu);
+}
+
+static void test_addr_init_uniform(void)
+{
+    cs4dtrp_addr_t addr;
+    cs4dtrp_addr_init(&addr, 0x01010101u);
+
+    /* rotl32(0x01010101, n*8) == 0x01010101 for any n */
+    for (int c = 0; c < CS4DTRP_NUM_CORNERS; c++)
+        CHECK(addr.corner_addr[c] == 0x01010101u);
+}
+
+static void test_active_corner_uint8_max(void)
+{
+    /* 255 % 4 == 3 */
+    CHECK(cs4dtrp_active_corner(255) == CS4DTRP_CORNER_SUNSET);
+}
+
+static void test_next_rotation_wraps_large(void)
+{
+    CHECK(cs4dtrp_next_rotation(4) == 1);   /* (4+1) % 4 == 1 */
+    CHECK(cs4dtrp_next_rotation(7) == 0);   /* (7+1) % 4 == 0 */
+    CHECK(cs4dtrp_next_rotation(255) == 0); /* (255+1) % 4 == 0 */
+}
+
+static void test_hdr_init_copies_by_value(void)
+{
+    cs4dtrp_addr_t src, dst;
+    cs4dtrp_addr_init(&src, 0x11223344u);
+    cs4dtrp_addr_init(&dst, 0x55667788u);
+
+    cs4dtrp_hdr_t hdr;
+    cs4dtrp_hdr_init(&hdr, &src, &dst, 64, 0);
+
+    uint32_t orig_src0 = hdr.src.corner_addr[0];
+    uint32_t orig_dst0 = hdr.dst.corner_addr[0];
+
+    /* Mutate the original addresses after init */
+    src.corner_addr[0] = 0xDEADBEEFu;
+    dst.corner_addr[0] = 0xCAFEBABEu;
+
+    /* Header must retain the original values (copy, not reference) */
+    CHECK(hdr.src.corner_addr[0] == orig_src0);
+    CHECK(hdr.dst.corner_addr[0] == orig_dst0);
+}
+
+static void test_hdr_checksum_deterministic(void)
+{
+    cs4dtrp_addr_t src, dst;
+    cs4dtrp_addr_init(&src, 0xAAAAAAAAu);
+    cs4dtrp_addr_init(&dst, 0xBBBBBBBBu);
+
+    cs4dtrp_hdr_t h1, h2;
+    cs4dtrp_hdr_init(&h1, &src, &dst, 100, 2);
+    cs4dtrp_hdr_init(&h2, &src, &dst, 100, 2);
+
+    /* Two headers with identical inputs must produce identical checksums */
+    CHECK(h1.checksum == h2.checksum);
+    CHECK(cs4dtrp_hdr_valid(&h1));
+    CHECK(cs4dtrp_hdr_valid(&h2));
+}
+
+static void test_hdr_rotation_out_of_range_invalid(void)
+{
+    cs4dtrp_addr_t src, dst;
+    cs4dtrp_addr_init(&src, 0u);
+    cs4dtrp_addr_init(&dst, 0u);
+
+    cs4dtrp_hdr_t hdr;
+    cs4dtrp_hdr_init(&hdr, &src, &dst, 0, 0);
+    CHECK(cs4dtrp_hdr_valid(&hdr));
+
+    /* Force an out-of-range rotation and recompute checksum so only
+     * the rotation range check can reject it. */
+    hdr.rotation = 5;
+    {
+        const uint8_t *p   = (const uint8_t *)&hdr;
+        size_t         len = (const uint8_t *)&hdr.checksum - p;
+        uint8_t        acc = 0;
+        for (size_t i = 0; i < len; i++)
+            acc ^= p[i];
+        hdr.checksum = acc;
+    }
     CHECK(!cs4dtrp_hdr_valid(&hdr));
 }
 
@@ -182,6 +296,13 @@ int main(void)
     test_hdr_rotation_clamped();
     test_hdr_tampered_invalid();
     test_hdr_payload_overflow_invalid();
+    test_addr_init_all_ones();
+    test_addr_init_uniform();
+    test_active_corner_uint8_max();
+    test_next_rotation_wraps_large();
+    test_hdr_init_copies_by_value();
+    test_hdr_checksum_deterministic();
+    test_hdr_rotation_out_of_range_invalid();
 
     if (g_failures == 0)
         printf("OK — %d/%d tests passed\n", g_tests, g_tests);

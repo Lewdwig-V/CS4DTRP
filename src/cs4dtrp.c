@@ -4,8 +4,14 @@
 
 #include "cs4dtrp.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
+
+_Static_assert(
+    offsetof(cs4dtrp_hdr_t, checksum) + sizeof(((cs4dtrp_hdr_t *)0)->checksum)
+        <= sizeof(cs4dtrp_hdr_t),
+    "checksum must be the last field in cs4dtrp_hdr_t");
 
 /* -------------------------------------------------------------------------
  * Internal helpers
@@ -23,10 +29,10 @@ static uint32_t rotl32(uint32_t v, unsigned int n)
 }
 
 /*
- * hdr_checksum — XOR every byte of the header except the checksum field.
+ * hdr_checksum — XOR every byte of the header up to the checksum field.
  *
- * The checksum field is the last byte of cs4dtrp_hdr_t so we hash all bytes
- * up to (but not including) it.
+ * This range may include compiler-inserted padding bytes; callers must
+ * ensure padding is zeroed (e.g. via memset) for deterministic checksums.
  */
 static uint8_t hdr_checksum(const cs4dtrp_hdr_t *hdr)
 {
@@ -46,12 +52,14 @@ static uint8_t hdr_checksum(const cs4dtrp_hdr_t *hdr)
 
 void cs4dtrp_addr_init(cs4dtrp_addr_t *addr, uint32_t base)
 {
+    assert(addr != NULL);
     for (unsigned int c = 0; c < CS4DTRP_NUM_CORNERS; c++)
         addr->corner_addr[c] = rotl32(base, c * 8u);
 }
 
 void cs4dtrp_addr_rotate(cs4dtrp_addr_t *addr)
 {
+    assert(addr != NULL);
     uint32_t tmp = addr->corner_addr[0];
     for (unsigned int c = 0; c < CS4DTRP_NUM_CORNERS - 1u; c++)
         addr->corner_addr[c] = addr->corner_addr[c + 1u];
@@ -69,6 +77,12 @@ void cs4dtrp_hdr_init(cs4dtrp_hdr_t        *hdr,
                       uint16_t              payload_len,
                       uint8_t               rotation)
 {
+    assert(hdr != NULL);
+    assert(src != NULL);
+    assert(dst != NULL);
+    assert(payload_len <= CS4DTRP_MAX_PAYLOAD);
+
+    memset(hdr, 0, sizeof(*hdr));
     hdr->src         = *src;
     hdr->dst         = *dst;
     hdr->rotation    = rotation % (uint8_t)CS4DTRP_NUM_CORNERS;
@@ -78,6 +92,9 @@ void cs4dtrp_hdr_init(cs4dtrp_hdr_t        *hdr,
 
 bool cs4dtrp_hdr_valid(const cs4dtrp_hdr_t *hdr)
 {
+    assert(hdr != NULL);
+    if (hdr->rotation >= CS4DTRP_NUM_CORNERS)
+        return false;
     if (hdr->payload_len > CS4DTRP_MAX_PAYLOAD)
         return false;
     return hdr->checksum == hdr_checksum(hdr);
