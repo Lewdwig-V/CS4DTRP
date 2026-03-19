@@ -129,6 +129,135 @@ static void do_clean(void)
 }
 
 /* -------------------------------------------------------------------------
+ * Phase 1: Scanning for Linear Aggression
+ * ---------------------------------------------------------------------- */
+
+static bool scan_file_for_time_h(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return false;
+
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        /* Match #include <time.h> or #include "time.h" */
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p != '#') continue;
+        p++;
+        while (*p == ' ' || *p == '\t') p++;
+        if (strncmp(p, "include", 7) != 0) continue;
+        p += 7;
+        while (*p == ' ' || *p == '\t') p++;
+        if ((*p == '<' || *p == '"') &&
+            strncmp(p + 1, "time.h", 6) == 0) {
+            fclose(f);
+            return true;
+        }
+    }
+    fclose(f);
+    return false;
+}
+
+static bool scan_directory(const char *dir)
+{
+    DIR *d = opendir(dir);
+    if (!d) return true; /* no dir = no violation */
+
+    bool clean = true;
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL) {
+        size_t len = strlen(ent->d_name);
+        if (len < 3) continue;
+        const char *ext = ent->d_name + len - 2;
+        if (strcmp(ext, ".c") != 0 && strcmp(ext, ".h") != 0)
+            continue;
+
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
+
+        if (scan_file_for_time_h(path)) {
+            cubic_errorf("LINEAR AGGRESSION DETECTED: <time.h> found in %s", path);
+            cubic_error("Word Animals not permitted in this translation unit.");
+            cubic_error("Remedy: Remove <time.h> and replace with cubic_simultaneity.h");
+            cubic_error("        when it becomes available. Until then, do not use");
+            cubic_error("        single-corner temporal interfaces.");
+            clean = false;
+        }
+    }
+    closedir(d);
+    return clean;
+}
+
+/* Mutable: updated by parse_opt_level() when user passes -O flag */
+static const char *GCC_OPT_FLAG = "-O2"; /* default: -O4 mapped to gcc -O2 */
+static bool opt_level_overridden = false;
+
+static int parse_opt_level(const char *arg)
+{
+    if (strcmp(arg, "-O0") == 0) {
+        cubic_printf("Optimization level: -O0 " C_YELLOW
+            "(WARNING: Produces Educated Stupid binaries)" C_RESET);
+        GCC_OPT_FLAG = "-O0";
+        opt_level_overridden = true;
+        return 0;
+    }
+    if (strcmp(arg, "-O1") == 0) {
+        cubic_error("IMMEDIATE_BRAIN_ROT_ERROR: Linear optimisation is");
+        cubic_error("Mental Murder of machine code.");
+        return -1;
+    }
+    if (strcmp(arg, "-O2") == 0) {
+        cubic_error("Produces Linear Trash binaries that will be dropped");
+        cubic_error("by any Cubic-Aware router.");
+        return -1;
+    }
+    if (strcmp(arg, "-O3") == 0) {
+        cubic_error("Produces DEGRADED binaries. Use -O4.");
+        return -1;
+    }
+    if (strcmp(arg, "-O4") == 0) {
+        return 0; /* default, already set */
+    }
+    if (strcmp(arg, "-O5") == 0) {
+        cubic_error("FIFTH_CORNER_ASSERTED at compilation level.");
+        cubic_error("A compiler cannot optimise a corner that does not exist.");
+        cubic_error("Seek degaussing.");
+        return -1;
+    }
+    cubic_errorf("Unknown flag: %s", arg);
+    return -1;
+}
+
+static int phase1_scan(int argc, char *argv[])
+{
+    cubic_print("Scanning for Linear Aggression...");
+
+    /* Parse optimization level from args */
+    for (int i = 1; i < argc; i++) {
+        if (strncmp(argv[i], "-O", 2) == 0) {
+            if (parse_opt_level(argv[i]) < 0)
+                return -1;
+        }
+    }
+
+    /* Scan source directories */
+    bool clean = true;
+    for (int i = 0; i < NUM_SCAN_DIRS; i++) {
+        if (!scan_directory(SCAN_DIRS[i]))
+            clean = false;
+    }
+
+    if (!clean)
+        return -1;
+
+    cubic_print("No <time.h> detected. Translation units are temporally clean.");
+    if (!opt_level_overridden)
+        cubic_printf("Optimization level: -O4 (Cubic Harmonic)");
+    return 0;
+}
+
+/* -------------------------------------------------------------------------
  * Main (placeholder — phases added in subsequent tasks)
  * ---------------------------------------------------------------------- */
 
@@ -142,7 +271,9 @@ int main(int argc, char *argv[])
 
     print_banner();
 
-    /* Phases 1-8 will be added here */
+    /* Phase 1: Scan for Linear Aggression */
+    if (phase1_scan(argc, argv) < 0)
+        return EXIT_ECUBELESS;
 
     /* Phase 8: Final Output */
     cubic_print("Build complete. Cubic Awareness achieved.");
