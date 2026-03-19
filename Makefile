@@ -4,6 +4,8 @@ CC       ?= gcc
 CFLAGS   ?= -std=c11 -Wall -Wextra -Wpedantic
 CPPFLAGS += -Iinclude
 
+HDRS     = include/cs4dtrp.h
+
 LIB_SRC  = src/cs4dtrp.c
 LIB_OBJ  = $(LIB_SRC:.c=.o)
 LIB      = libcs4dtrp.a
@@ -20,14 +22,17 @@ lib: $(LIB)
 $(LIB): $(LIB_OBJ)
 	$(AR) rcs $@ $^
 
-src/%.o: src/%.c
+src/%.o: src/%.c $(HDRS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 
-$(TEST_BIN): $(TEST_SRC) $(LIB)
+$(TEST_BIN): $(TEST_SRC) $(LIB) $(HDRS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -L. -lcs4dtrp -o $@
 
 clean:
 	rm -f $(LIB_OBJ) $(LIB) $(TEST_BIN)
+
+cubemake: tools/cubemake.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
