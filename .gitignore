@@ -58,3 +58,4 @@ dkms.conf
 libcs4dtrp.a
 src/*.o
 tests/test_cs4dtrp
+cubemake

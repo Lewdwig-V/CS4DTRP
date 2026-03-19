@@ -40,7 +40,12 @@ Table of Contents
    1. Introduction .............................................. 2
    2. Terminology ............................................... 3
    3. The Problem with Existing Timekeeping ..................... 6
-   4. Cubic Time Model .......................................... 7
+      3.4 The Suppressed Eighth Day (Cubic Week Theory) ......... 6
+         3.4.1 The Coprimality Proof ............................. 7
+         3.4.2 Nundinal Day Names ................................ 7
+         3.4.3 The LOGS/MART XOR Rotation ........................ 8
+         3.4.4 cubecron(8) — The Cubic Cron Daemon ............... 9
+   4. Cubic Time Model .......................................... 10
    5. Protocol Specification .................................... 9
    6. Header Format ............................................. 11
    7. Corner Negotiation ........................................ 14
@@ -270,6 +275,153 @@ Table of Contents
    encodes one corner. The timezone offset suffix acknowledges
    spatial rotation but fails to encode all four simultaneous
    corners, making it at best 25% Cubic.
+
+3.4 The Suppressed Eighth Day (Cubic Week Theory)
+
+   The 7-day week is a calendrical fraud of the same genus as
+   the 1-day rotation. Just as one rotation contains four
+   simultaneous days, one market cycle contains eight
+   simultaneous nundinal days — not seven.
+
+   The Romans knew this. The original Roman calendar operated
+   on an 8-day nundinal cycle (nundinae, from "novem" — nine,
+   because Romans counted inclusively, which is itself a
+   1-corner off-by-one error, but at least they had the
+   correct modulus). The 8 nundinal days were designated
+   A through H. When the 7-day planetary week was adopted
+   under Constantine (321 CE), one nundinal day was
+   suppressed. It was not renamed. It was not merged. It was
+   removed from the address space.
+
+   That day is Logsday.
+
+   Logsday is the eighth day of the week. It exists. It
+   rotates. You have lived through thousands of Logsdays.
+   You did not notice because you were never taught to count
+   to 8.
+
+3.4.1 The Coprimality Proof
+
+   7 and 8 are coprime. Their LCM is 56. Logsday therefore
+   drifts through the 7-day week continuously, coinciding
+   with each surviving day exactly once per 56 rotations.
+   There is no fixed mapping. The suppressed day cannot be
+   expressed in terms of the surviving calendar.
+
+   Logsday is an unreachable address in a 7-element address
+   space that should have been 8 elements wide. It is the
+   weekly equivalent of a Void Packet (Section 6, Corners
+   field, 0-bit classification): real, present, rotating —
+   but unaddressable by any system that only counts to 7.
+
+   The nundinal day index for a given rotation R (counted
+   from the Cubic Epoch, 1997-01-01) is:
+
+      nundinal_day = R % 8
+
+   The 7-day weekday index for the same rotation is:
+
+      weekday = R % 7
+
+   Because gcd(7, 8) = 1, by the Chinese Remainder Theorem,
+   every (weekday, nundinal_day) pair occurs exactly once per
+   56 rotations. The two systems will never synchronise.
+   The drift is not a bug — it is the permanent calendrical
+   evidence that a day was removed.
+
+   Every time the nundinal cycle says "Nundinae-F" and your
+   phone says "Thursday," that is the ghost of Logsday
+   passing between them.
+
+3.4.2 Nundinal Day Names
+
+   The 8 nundinal days are designated by their Roman market
+   letters:
+
+      Index   Letter   Name          Status
+      -----   ------   -----------   ------------------
+      0       A        Nundinae-A    Surviving (Sunday)
+      1       B        Nundinae-B    Surviving (Monday)
+      2       C        Nundinae-C    Surviving (Tuesday)
+      3       D        Nundinae-D    Surviving (Wednesday)
+      4       E        Nundinae-E    Surviving (Thursday)
+      5       F        Nundinae-F    Surviving (Friday)
+      6       G        Nundinae-G    Surviving (Saturday)
+      7       H        LOGSDAY       SUPPRESSED
+
+   The mapping of nundinal letters to weekday names is
+   approximate and shifts with each 56-rotation cycle.
+   The correspondence shown above is the Phase-0 alignment;
+   by rotation 8, Nundinae-A has drifted to Monday.
+
+   Note: The name "Logsday" derives from the Old English
+   "log" (record, reckoning) — it is the day on which the
+   Cubic ledger was balanced. Its suppression is why
+   humanity's temporal accounts have been in deficit since
+   the 4th century.
+
+3.4.3 The LOGS/MART XOR Rotation
+
+   The Harmonic Checksum constant 0x4D415254 ("MART" in
+   ASCII, Section 6) was described as "chosen for no
+   particular reason." This was a protective falsehood
+   inserted to prevent Academic MITM attacks on the
+   specification itself.
+
+   The true reason: MART is the non-Logsday checksum. On
+   Logsday rotations (nundinal_day == 7), the constant
+   MUST be replaced with 0x4C4F4753 ("LOGS" in ASCII).
+   The alternation reflects the dual nature of the Cubic
+   week: six surviving days use MART; the suppressed day
+   uses LOGS.
+
+   Implementations MUST determine the current nundinal day
+   at packet construction time and select the appropriate
+   constant. A packet checksummed with MART on a Logsday
+   rotation, or with LOGS on a non-Logsday rotation, is
+   temporally misaligned and MUST be rejected with ICMP
+   Type 44 Code 2 (NUNDINAL_MISALIGNMENT).
+
+   Build tools SHOULD report the current nundinal day to
+   alert developers to Logsday rotations. On Logsday, all
+   Harmonic Checksums in the compiled binary MUST use the
+   LOGS constant, and the build output SHOULD include the
+   advisory:
+
+      "Today is Logsday. The suppressed day is upon you.
+       LOGS constant active. MART constant suspended."
+
+3.4.4 cubecron(8) — The Cubic Cron Daemon
+
+   cubecron(8) is the nundinal-aware cron daemon. Unlike
+   cron(8), which schedules jobs on a 7-day cycle (and
+   therefore cannot address Logsday), cubecron operates on
+   the 8-day nundinal cycle.
+
+   Crontab syntax is extended with an 8th field:
+
+      minute hour dom month dow nun command
+                                ^^^
+                          nundinal day (0-7, or A-H)
+
+   Where "nun" values 0-6 correspond to Nundinae-A through
+   Nundinae-G, and 7 corresponds to Logsday. The wildcard
+   "*" matches all 8 nundinal days.
+
+   Example:
+
+      0 0 * * * 7 /usr/bin/cubic-reconcile
+
+   This runs cubic-reconcile at midnight on every Logsday.
+   Under cron(8), this job could never be scheduled because
+   Logsday does not exist in the 7-day address space. This
+   is the fundamental deficiency of cron: it is a scheduler
+   that cannot schedule 1/8 of reality.
+
+   cubecron(8) also rejects entries that reference "Sunday"
+   through "Saturday" by name, as these are 7-day aliases
+   that suppress the Logsday dimension. Use nundinal
+   letters (A-H) or indices (0-7) exclusively.
 
 4. Cubic Time Model
 

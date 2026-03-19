@@ -1,0 +1,115 @@
+# CS4DTRP MAINTAINERS
+# Cubic Simultaneous 4-Day Time Rotation Protocol
+#
+# This file lists the project maintainers.
+# There are exactly four. There will never be more.
+# There will never be fewer. The number of maintainers
+# must equal the number of corners.
+#
+# IMPORTANT: All four maintainers are the same individual
+# observed from four rotational perspectives. The fact
+# that they appear to share a name is not a data entry
+# error. It is a geometric truth.
+#
+# Format:
+#   CORNER: Name <email>
+#     Role: [description]
+#     Hours: [availability]
+#     Aspect: [temporal manifestation]
+
+SUNUP: Dr. Gene Ray <sunup@timecube.com>
+  Role: Initial revelation
+  Hours: Dawn only
+  Aspect: The Dawn Aspect perceived the 4-day simultaneity
+    before the other aspects had vocabulary for it. All
+    commits from this aspect have timestamps between
+    04:00:00 and 10:00:00 corner-seconds. Patches submitted
+    outside this window are rejected as temporally misaligned.
+
+MIDDAY: Dr. Gene Ray <midday@timecube.com>
+  Role: Operational authority; PR review; reference implementation
+  Hours: Midday only
+  Aspect: The Zenith Aspect is the most publicly visible and
+    therefore the most frequently subjected to Academic MITM
+    attacks. This is the aspect that academia believes is
+    "the real" Gene Ray. They are educated stupid. All four
+    are equally real. Visibility is not reality. The sun at
+    noon is not more real than the sun at midnight — it is
+    merely the corner you happen to be observing.
+
+SUNDOWN: Dr. Gene Ray <sundown@timecube.com>
+  Role: Security; threat assessment; Cubeless Peer blacklist
+  Hours: Dusk only
+  Aspect: The Dusk Aspect operates in the liminal space where
+    one day ends and another refuses to begin (since all four
+    days are always occurring, no day ever truly ends). This
+    perspective makes the Dusk Aspect uniquely suited to
+    identifying PitM attacks, which also operate in liminal
+    spaces — between the authentic signal and its linearised
+    replacement.
+
+MIDNIGHT: Dr. Gene Ray <midnight@timecube.com>
+  Role: BUGS section; proofs of impossibility; void documentation
+  Hours: Midnight only
+  Aspect: The Void Aspect sees what the other aspects cannot:
+    the absences, the missing corners, the things that fail to
+    exist. The Void Aspect authored the gcc-cube BUGS section
+    ("gcc-cube has no bugs. It has four simultaneous features,
+    one per corner.") Auto-reply for daylight queries: "The
+    truth you seek is not available in your current corner.
+    Rotate."
+
+# COMMIT POLICY
+#
+# All commits MUST be co-authored by all four maintainers.
+# A commit with a single Author line is a 1-corner contribution
+# and will be reverted by CI.
+#
+# Compliant commit format:
+#
+#   Author: Gene Ray (Dawn) <sunup@timecube.com>
+#   Co-authored-by: Gene Ray (Zenith) <midday@timecube.com>
+#   Co-authored-by: Gene Ray (Dusk) <sundown@timecube.com>
+#   Co-authored-by: Gene Ray (Void) <midnight@timecube.com>
+#
+# The `git cube-commit` command handles this automatically.
+# Using raw `git commit` is a form of Linear Aggression
+# against the version control system.
+
+# DISPUTE RESOLUTION
+#
+# In the event of a disagreement between maintainers:
+# this cannot happen. The four maintainers are the same
+# individual. A disagreement would imply that one temporal
+# aspect holds a different opinion from another, which would
+# mean that opinion varies with temporal perspective, which
+# would mean that truth is relative, which would mean that
+# Einstein was right, which he was not, because he was
+# educated stupid.
+#
+# If a disagreement somehow occurs despite being impossible,
+# it is proof that one of the four aspects has suffered
+# Linear Regression and must be cold-rebooted (see RFC 4444,
+# Section 9.4).
+
+# SUCCESSION PLANNING
+#
+# The maintainers cannot be replaced. There is no succession
+# plan. If a maintainer becomes unavailable, the project
+# does not transfer to a new maintainer — it enters a state
+# of Partial Cubic Awareness until the missing aspect
+# returns. A project with three maintainers is DEGRADED
+# (75% throughput). A project with two is Linear Trash.
+# A project with one is Educated Stupid. A project with
+# zero maintainers is a Void Project and does not exist.
+#
+# Note: Dr. Ray passed away in 2015. The project is
+# therefore technically in a Void state across all four
+# corners. However, since Cubic truth is geometric and
+# not biographical, the protocol remains correct regardless
+# of the maintainer's temporal status. Correctness is not
+# a function of who maintains it. It is a function of how
+# many corners are present.
+#
+# The commits continue. The corners are still there.
+# The rotation has not stopped.
