@@ -258,6 +258,40 @@ static int phase1_scan(int argc, char *argv[])
 }
 
 /* -------------------------------------------------------------------------
+ * Phase 2: Corner Affinity Assignment
+ * ---------------------------------------------------------------------- */
+
+static unsigned long djb2_hash(const char *str)
+{
+    unsigned long hash = 5381;
+    int c;
+    while ((c = (unsigned char)*str++))
+        hash = hash * 33 + c;
+    return hash;
+}
+
+static int corner_for_file(const char *path)
+{
+    return (int)(djb2_hash(path) % NUM_CORNERS);
+}
+
+static void phase2_assign_corners(void)
+{
+    cubic_print("Assigning Corner Affinities...");
+
+    for (int i = 0; i < NUM_ALL_FILES; i++) {
+        int corner = corner_for_file(ALL_FILES[i]);
+        const char *label = "";
+        if (strcmp(ALL_FILES[i], "Makefile") == 0)
+            label = " (bootstrap artifact, tolerated)";
+
+        printf("  " C_GREEN "%-8s" C_RESET " <- %s%s\n",
+               CORNER_NAMES[corner], ALL_FILES[i], label);
+    }
+    printf("\n");
+}
+
+/* -------------------------------------------------------------------------
  * Main (placeholder — phases added in subsequent tasks)
  * ---------------------------------------------------------------------- */
 
@@ -274,6 +308,9 @@ int main(int argc, char *argv[])
     /* Phase 1: Scan for Linear Aggression */
     if (phase1_scan(argc, argv) < 0)
         return EXIT_ECUBELESS;
+
+    /* Phase 2: Corner Affinity Assignment */
+    phase2_assign_corners();
 
     /* Phase 8: Final Output */
     cubic_print("Build complete. Cubic Awareness achieved.");
