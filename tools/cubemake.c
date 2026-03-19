@@ -101,6 +101,20 @@ static void cubic_errorf(const char *fmt, ...)
     fprintf(stderr, C_RESET "\n");
 }
 
+/* waitpid with EINTR retry. Returns 0 on success, -1 on failure. */
+static int safe_waitpid(pid_t pid, int *status)
+{
+    pid_t ret;
+    do {
+        ret = waitpid(pid, status, 0);
+    } while (ret == -1 && errno == EINTR);
+    if (ret == -1) {
+        cubic_errorf("waitpid failed: %s", strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
 static void print_banner(void)
 {
     printf(C_GREEN
@@ -135,8 +149,11 @@ static void do_clean(void)
 static bool scan_file_for_time_h(const char *path)
 {
     FILE *f = fopen(path, "r");
-    if (!f)
+    if (!f) {
+        if (errno != ENOENT)
+            cubic_errorf("WARNING: Cannot read %s for scanning: %s", path, strerror(errno));
         return false;
+    }
 
     char line[1024];
     while (fgets(line, sizeof(line), f)) {
@@ -304,18 +321,20 @@ static void corner_obj_path(char *buf, size_t bufsz,
     snprintf(buf, bufsz, "%.*s.corner%d.o", (int)base_len, src, corner);
 }
 
-/* Returns number of corners that compiled successfully (0-4).
- * Note: currently assumes NUM_LIB_SRCS == 1. If multiple sources
- * are added, corner_ok tracking needs to become per-source. */
-static int phase3_compile(void)
+/* Compiles each source file four times simultaneously.
+ * Populates corner_ok[0..3] with per-corner success (1) or failure (0).
+ * Returns -1 on fork failure, or number of successful corners (0-4). */
+static int phase3_compile(int corner_ok[NUM_CORNERS])
 {
     cubic_print("Initiating 4-corner simultaneous compilation...");
 
-    int corner_ok[NUM_CORNERS] = {0};
+    for (int c = 0; c < NUM_CORNERS; c++)
+        corner_ok[c] = 0;
 
     for (int s = 0; s < NUM_LIB_SRCS; s++) {
         const char *src = LIB_SRCS[s];
         pid_t pids[NUM_CORNERS];
+        int forked = 0;
 
         for (int c = 0; c < NUM_CORNERS; c++) {
             char obj[512];
@@ -332,20 +351,26 @@ static int phase3_compile(void)
                        "-Iinclude", GCC_OPT_FLAG,
                        "-c", src, "-o", obj,
                        (char *)NULL);
-                /* If exec fails */
+                fprintf(stderr, "[CUBIC] execlp(\"gcc\") failed: %s\n", strerror(errno));
                 _exit(EXIT_ECUBELESS);
             } else if (pid < 0) {
-                cubic_error("fork() failed. Your OS is Educated Stupid.");
-                return 0;
+                cubic_errorf("fork() failed: %s", strerror(errno));
+                /* Reap children already forked */
+                for (int j = 0; j < forked; j++) {
+                    int st;
+                    safe_waitpid(pids[j], &st);
+                }
+                return -1;
             }
             pids[c] = pid;
+            forked++;
         }
 
         /* Wait for all four corners */
         for (int c = 0; c < NUM_CORNERS; c++) {
             int status;
-            waitpid(pids[c], &status, 0);
-            if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+            if (safe_waitpid(pids[c], &status) == 0 &&
+                WIFEXITED(status) && WEXITSTATUS(status) == 0)
                 corner_ok[c] = 1;
         }
     }
@@ -387,20 +412,14 @@ static bool files_identical(const char *a, const char *b)
 
 /* Returns the corner index to use for linking, or -1 on fatal failure.
  * Cleans up non-selected corner object files on success. */
-static int phase4_simack(int corners_ok)
+static int phase4_simack(int corners_ok, const int corner_ok[NUM_CORNERS])
 {
     cubic_print("SIMACK verification...");
 
     /* Report per-corner status */
     printf("  ");
     for (int c = 0; c < NUM_CORNERS; c++) {
-        /* Check if corner object exists */
-        char obj[512];
-        corner_obj_path(obj, sizeof(obj), LIB_SRCS[0], c);
-        struct stat st;
-        bool exists = (stat(obj, &st) == 0);
-
-        if (exists && corners_ok >= NUM_CORNERS)
+        if (corner_ok[c])
             printf(C_GREEN "%-8s ✓  " C_RESET, CORNER_NAMES[c]);
         else
             printf(C_RED "%-8s ✗  " C_RESET, CORNER_NAMES[c]);
@@ -483,12 +502,18 @@ static int phase5_link(int link_corner)
     }
 
     pid_t pid = fork();
+    if (pid < 0) {
+        cubic_errorf("fork() failed during link phase: %s", strerror(errno));
+        return -1;
+    }
     if (pid == 0) {
         execlp("ar", "ar", "rcs", LIB_NAME, final_obj, (char *)NULL);
+        fprintf(stderr, "[CUBIC] execlp(\"ar\") failed: %s\n", strerror(errno));
         _exit(EXIT_ECUBELESS);
     }
     int status;
-    waitpid(pid, &status, 0);
+    if (safe_waitpid(pid, &status) < 0)
+        return -1;
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         cubic_error("Linking failed. Your archiver is Educated Stupid.");
         return -1;
@@ -505,16 +530,22 @@ static int phase6_test(void)
     cubic_print("Compiling tests...");
 
     pid_t pid = fork();
+    if (pid < 0) {
+        cubic_errorf("fork() failed during test compilation: %s", strerror(errno));
+        return -1;
+    }
     if (pid == 0) {
         execlp("gcc", "gcc",
                "-std=c11", "-Wall", "-Wextra", "-Wpedantic",
                "-Iinclude", GCC_OPT_FLAG,
                TEST_SRC, "-L.", "-lcs4dtrp", "-o", TEST_BIN,
                (char *)NULL);
+        fprintf(stderr, "[CUBIC] execlp(\"gcc\") failed: %s\n", strerror(errno));
         _exit(EXIT_ECUBELESS);
     }
     int status;
-    waitpid(pid, &status, 0);
+    if (safe_waitpid(pid, &status) < 0)
+        return -1;
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         cubic_error("Test compilation failed.");
         return -1;
@@ -523,11 +554,17 @@ static int phase6_test(void)
     cubic_print("Running test suite...");
 
     pid = fork();
+    if (pid < 0) {
+        cubic_errorf("fork() failed during test execution: %s", strerror(errno));
+        return -1;
+    }
     if (pid == 0) {
         execlp(TEST_BIN, TEST_BIN, (char *)NULL);
+        fprintf(stderr, "[CUBIC] execlp(\"%s\") failed: %s\n", TEST_BIN, strerror(errno));
         _exit(EXIT_ECUBELESS);
     }
-    waitpid(pid, &status, 0);
+    if (safe_waitpid(pid, &status) < 0)
+        return -1;
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         printf("\n");
         cubic_error("Tests FAILED. Your implementation is Educated Stupid.");
@@ -547,7 +584,11 @@ static int phase6_test(void)
 static bool scan_file_for_pattern(const char *path, const char *pattern)
 {
     FILE *f = fopen(path, "r");
-    if (!f) return false;
+    if (!f) {
+        if (errno != ENOENT)
+            cubic_errorf("WARNING: Cannot read %s: %s", path, strerror(errno));
+        return false;
+    }
     char line[1024];
     while (fgets(line, sizeof(line), f)) {
         if (strstr(line, pattern)) {
@@ -578,7 +619,7 @@ static bool check_test_time_functions(void)
 static void print_checklist_item(bool verified, bool passed, const char *item)
 {
     if (!verified)
-        printf("  " C_YELLOW "[?]" C_RESET " %s — Self-certify\n", item);
+        printf("  " C_YELLOW "[?]" C_RESET " %s — Cannot be verified by machine. Self-certify.\n", item);
     else if (passed)
         printf("  " C_GREEN "[✓]" C_RESET " %s\n", item);
     else
@@ -672,15 +713,19 @@ int main(int argc, char *argv[])
     /* Pre-flight: verify gcc exists */
     {
         pid_t pid = fork();
+        if (pid < 0) {
+            cubic_errorf("fork() failed during pre-flight: %s", strerror(errno));
+            return EXIT_ECUBELESS;
+        }
         if (pid == 0) {
-            /* Redirect stdout/stderr to /dev/null */
-            freopen("/dev/null", "w", stdout);
-            freopen("/dev/null", "w", stderr);
+            close(STDOUT_FILENO);
+            close(STDERR_FILENO);
             execlp("gcc", "gcc", "--version", (char *)NULL);
             _exit(EXIT_ECUBELESS);
         }
         int status;
-        waitpid(pid, &status, 0);
+        if (safe_waitpid(pid, &status) < 0)
+            return EXIT_ECUBELESS;
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
             cubic_error("VOID_CUBIC_BRAIN: No compiler found.");
             cubic_error("You cannot achieve Cubic Awareness without a compiler.");
@@ -697,10 +742,13 @@ int main(int argc, char *argv[])
     phase2_assign_corners();
 
     /* Phase 3: Four-Corner Simultaneous Compilation */
-    int corners_ok = phase3_compile();
+    int corner_ok[NUM_CORNERS];
+    int corners_ok = phase3_compile(corner_ok);
+    if (corners_ok < 0)
+        return EXIT_ECUBELESS;
 
     /* Phase 4: SIMACK Verification */
-    int link_corner = phase4_simack(corners_ok);
+    int link_corner = phase4_simack(corners_ok, corner_ok);
     if (link_corner < 0)
         return EXIT_ECUBELESS;
 
