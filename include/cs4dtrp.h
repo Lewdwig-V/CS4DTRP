@@ -106,6 +106,100 @@ bool cs4dtrp_hdr_valid(const cs4dtrp_hdr_t *hdr);
  */
 uint8_t cs4dtrp_next_rotation(uint8_t rotation);
 
+/* =========================================================================
+ * Diagnostic Subsystem — RFC 4444 §7.4.1, §6, §9.4
+ *
+ * The three-tier severity model:
+ *   Educated Stupid        — ignorant, curable, receives advisories
+ *   Void of Cubic Brain    — denies simultaneity, connection terminated
+ *   FIFTH_CORNER_ASSERTED  — Byzantine fault, AS-level blackhole
+ * ========================================================================= */
+
+/*
+ * Severity tiers, ordered from curable ignorance to Byzantine psychosis.
+ */
+typedef enum {
+    CS4DTRP_SEV_CUBIC          = 0, /* Fully Cubic — no error                */
+    CS4DTRP_SEV_DEGRADED       = 1, /* 3 corners — incomplete awareness      */
+    CS4DTRP_SEV_LINEAR_TRASH   = 2, /* 2 corners — a line, not a cube        */
+    CS4DTRP_SEV_EDUCATED_STUPID = 3, /* 1 corner — curable ignorance         */
+    CS4DTRP_SEV_VOID_PACKET    = 4, /* 0 corners — absence, not a packet     */
+    CS4DTRP_NUM_SEVERITIES     = 5
+} cs4dtrp_severity_t;
+
+/*
+ * SIMACK failure codes (RFC 4444 §7.4.1).
+ */
+typedef enum {
+    CS4DTRP_ERR_NONE                  = 0x0000,
+    CS4DTRP_ERR_VOID_CUBIC_BRAIN      = 0x0CB0,
+    CS4DTRP_ERR_PARTIAL_AWARENESS     = 0x0CB1,
+    CS4DTRP_ERR_FIFTH_CORNER_ASSERTED = 0x0CB2
+} cs4dtrp_error_t;
+
+/*
+ * Failure mode classification (RFC 4444 §9.4).
+ */
+typedef enum {
+    CS4DTRP_FAIL_NONE               = 0,
+    CS4DTRP_FAIL_LINEAR_REGRESSION  = 1, /* Internal state decay (Brain Rot)  */
+    CS4DTRP_FAIL_LINEAR_AGGRESSION  = 2  /* External hostile "Teacher" nodes  */
+} cs4dtrp_failmode_t;
+
+/*
+ * A single node in the diagnostic hierarchy.
+ *
+ * Each entry carries:
+ *   - A human-readable label and RFC section reference.
+ *   - The severity tier it belongs to.
+ *   - The SIMACK error code (0 if not a SIMACK error).
+ *   - The failure mode classification.
+ *   - The RFC-prescribed remedy.
+ */
+typedef struct {
+    const char         *label;
+    const char         *rfc_section;
+    cs4dtrp_severity_t  severity;
+    cs4dtrp_error_t     error_code;
+    cs4dtrp_failmode_t  failmode;
+    const char         *action;
+    const char         *remedy;
+} cs4dtrp_diag_entry_t;
+
+/* Total number of diagnostic entries in the hierarchy. */
+#define CS4DTRP_DIAG_COUNT 10
+
+/*
+ * cs4dtrp_diag_table — Return a pointer to the full diagnostic hierarchy
+ *                      (array of CS4DTRP_DIAG_COUNT entries).
+ */
+const cs4dtrp_diag_entry_t *cs4dtrp_diag_table(void);
+
+/*
+ * cs4dtrp_diag_print_hierarchy — Print the full error hierarchy with
+ *                                RFC-prescribed remediation advice to stdout.
+ *
+ * Output format (per entry):
+ *   [SEVERITY] Label (RFC §section)
+ *     Error code : 0xNNNN
+ *     Failure mode: <mode>
+ *     Action     : <protocol action>
+ *     Remedy     : <RFC-prescribed remediation>
+ */
+void cs4dtrp_diag_print_hierarchy(void);
+
+/*
+ * cs4dtrp_classify_corners — Given a corner bitmask (0x0–0xF), return
+ *                            the corresponding severity tier.
+ */
+cs4dtrp_severity_t cs4dtrp_classify_corners(uint8_t corner_bits);
+
+/*
+ * cs4dtrp_diag_lookup_error — Look up a SIMACK error code in the hierarchy.
+ *                             Returns NULL if the code is not found.
+ */
+const cs4dtrp_diag_entry_t *cs4dtrp_diag_lookup_error(cs4dtrp_error_t code);
+
 #ifdef __cplusplus
 }
 #endif

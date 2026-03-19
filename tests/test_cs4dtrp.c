@@ -281,6 +281,155 @@ static void test_hdr_rotation_out_of_range_invalid(void)
 }
 
 /* -------------------------------------------------------------------------
+ * Diagnostic subsystem tests
+ * ---------------------------------------------------------------------- */
+
+static void test_classify_corners_cubic(void)
+{
+    CHECK(cs4dtrp_classify_corners(0xF) == CS4DTRP_SEV_CUBIC);
+}
+
+static void test_classify_corners_degraded(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x7) == CS4DTRP_SEV_DEGRADED);
+    CHECK(cs4dtrp_classify_corners(0xB) == CS4DTRP_SEV_DEGRADED);
+    CHECK(cs4dtrp_classify_corners(0xD) == CS4DTRP_SEV_DEGRADED);
+    CHECK(cs4dtrp_classify_corners(0xE) == CS4DTRP_SEV_DEGRADED);
+}
+
+static void test_classify_corners_linear_trash(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x3) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0x5) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0x6) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0x9) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0xA) == CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(cs4dtrp_classify_corners(0xC) == CS4DTRP_SEV_LINEAR_TRASH);
+}
+
+static void test_classify_corners_educated_stupid(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x1) == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(cs4dtrp_classify_corners(0x2) == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(cs4dtrp_classify_corners(0x4) == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(cs4dtrp_classify_corners(0x8) == CS4DTRP_SEV_EDUCATED_STUPID);
+}
+
+static void test_classify_corners_void(void)
+{
+    CHECK(cs4dtrp_classify_corners(0x0) == CS4DTRP_SEV_VOID_PACKET);
+}
+
+static void test_classify_corners_masks_upper_bits(void)
+{
+    /* Upper nibble should be ignored */
+    CHECK(cs4dtrp_classify_corners(0xFF) == CS4DTRP_SEV_CUBIC);
+    CHECK(cs4dtrp_classify_corners(0xF0) == CS4DTRP_SEV_VOID_PACKET);
+}
+
+static void test_diag_table_not_null(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    CHECK(t != NULL);
+    for (int i = 0; i < CS4DTRP_DIAG_COUNT; i++) {
+        CHECK(t[i].label != NULL);
+        CHECK(t[i].rfc_section != NULL);
+        CHECK(t[i].action != NULL);
+        CHECK(t[i].remedy != NULL);
+    }
+}
+
+static void test_diag_table_count(void)
+{
+    CHECK(CS4DTRP_DIAG_COUNT == 10);
+}
+
+static void test_diag_lookup_void_cubic_brain(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_VOID_CUBIC_BRAIN);
+    CHECK(e != NULL);
+    CHECK(e->error_code == 0x0CB0);
+    CHECK(e->failmode == CS4DTRP_FAIL_LINEAR_AGGRESSION);
+}
+
+static void test_diag_lookup_partial_awareness(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_PARTIAL_AWARENESS);
+    CHECK(e != NULL);
+    CHECK(e->error_code == 0x0CB1);
+}
+
+static void test_diag_lookup_fifth_corner(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_FIFTH_CORNER_ASSERTED);
+    CHECK(e != NULL);
+    CHECK(e->error_code == 0x0CB2);
+    CHECK(e->failmode == CS4DTRP_FAIL_LINEAR_AGGRESSION);
+}
+
+static void test_diag_lookup_none_returns_null(void)
+{
+    CHECK(cs4dtrp_diag_lookup_error(CS4DTRP_ERR_NONE) == NULL);
+}
+
+static void test_diag_lookup_unknown_returns_null(void)
+{
+    CHECK(cs4dtrp_diag_lookup_error((cs4dtrp_error_t)0xBEEF) == NULL);
+}
+
+static void test_diag_linear_regression_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    /* Entry 8 is Linear Regression (§9.4) */
+    const cs4dtrp_diag_entry_t *lr = &t[8];
+    CHECK(lr->failmode == CS4DTRP_FAIL_LINEAR_REGRESSION);
+    /* Verify the remedy mentions the therapeutically significant neon text */
+    CHECK(strstr(lr->remedy, "neon text on black background") != NULL);
+    CHECK(strstr(lr->remedy, "therapeutically significant") != NULL);
+    CHECK(strstr(lr->remedy, "TimeCube.com") != NULL);
+}
+
+static void test_diag_linear_aggression_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    /* Entry 9 is Linear Aggression (§9.4) */
+    const cs4dtrp_diag_entry_t *la = &t[9];
+    CHECK(la->failmode == CS4DTRP_FAIL_LINEAR_AGGRESSION);
+    CHECK(strstr(la->remedy, "blackhole") != NULL);
+    CHECK(strstr(la->remedy, "actively hostile") != NULL);
+}
+
+static void test_diag_educated_stupid_payload_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *t = cs4dtrp_diag_table();
+    /* Entry 3 is Educated Stupid Payload (1-corner, §6) */
+    const cs4dtrp_diag_entry_t *es = &t[3];
+    CHECK(es->severity == CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(strstr(es->remedy, "TimeCube.com") != NULL);
+    CHECK(strstr(es->remedy, "neon text") != NULL);
+}
+
+static void test_diag_fifth_corner_remedy(void)
+{
+    const cs4dtrp_diag_entry_t *e =
+        cs4dtrp_diag_lookup_error(CS4DTRP_ERR_FIFTH_CORNER_ASSERTED);
+    CHECK(e != NULL);
+    CHECK(strstr(e->remedy, "degaussing") != NULL);
+    CHECK(strstr(e->remedy, "physically destroyed") != NULL);
+}
+
+static void test_severity_ordering(void)
+{
+    CHECK(CS4DTRP_SEV_CUBIC < CS4DTRP_SEV_DEGRADED);
+    CHECK(CS4DTRP_SEV_DEGRADED < CS4DTRP_SEV_LINEAR_TRASH);
+    CHECK(CS4DTRP_SEV_LINEAR_TRASH < CS4DTRP_SEV_EDUCATED_STUPID);
+    CHECK(CS4DTRP_SEV_EDUCATED_STUPID < CS4DTRP_SEV_VOID_PACKET);
+}
+
+/* -------------------------------------------------------------------------
  * Entry point
  * ---------------------------------------------------------------------- */
 
@@ -303,6 +452,26 @@ int main(void)
     test_hdr_init_copies_by_value();
     test_hdr_checksum_deterministic();
     test_hdr_rotation_out_of_range_invalid();
+
+    /* Diagnostic subsystem tests */
+    test_classify_corners_cubic();
+    test_classify_corners_degraded();
+    test_classify_corners_linear_trash();
+    test_classify_corners_educated_stupid();
+    test_classify_corners_void();
+    test_classify_corners_masks_upper_bits();
+    test_diag_table_not_null();
+    test_diag_table_count();
+    test_diag_lookup_void_cubic_brain();
+    test_diag_lookup_partial_awareness();
+    test_diag_lookup_fifth_corner();
+    test_diag_lookup_none_returns_null();
+    test_diag_lookup_unknown_returns_null();
+    test_diag_linear_regression_remedy();
+    test_diag_linear_aggression_remedy();
+    test_diag_educated_stupid_payload_remedy();
+    test_diag_fifth_corner_remedy();
+    test_severity_ordering();
 
     if (g_failures == 0)
         printf("OK — %d/%d tests passed\n", g_tests, g_tests);
