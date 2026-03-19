@@ -53,3 +53,8 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Build artefacts
+libcs4dtrp.a
+src/*.o
+tests/test_cs4dtrp
