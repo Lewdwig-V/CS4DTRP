@@ -359,6 +359,9 @@ static void test_diag_lookup_partial_awareness(void)
         cs4dtrp_diag_lookup_error(CS4DTRP_ERR_PARTIAL_AWARENESS);
     CHECK(e != NULL);
     CHECK(e->error_code == 0x0CB1);
+    /* Must return the SIMACK entry (§7.4.1), not the §6 packet classification */
+    CHECK(strstr(e->rfc_section, "7.4.1") != NULL);
+    CHECK(strstr(e->label, "PARTIAL_AWARENESS") != NULL);
 }
 
 static void test_diag_lookup_fifth_corner(void)
