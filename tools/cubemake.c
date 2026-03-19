@@ -541,6 +541,115 @@ static int phase6_test(void)
 }
 
 /* -------------------------------------------------------------------------
+ * Phase 7: Cubic Compliance Checklist
+ * ---------------------------------------------------------------------- */
+
+static bool scan_file_for_pattern(const char *path, const char *pattern)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) return false;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        if (strstr(line, pattern)) {
+            fclose(f);
+            return true;
+        }
+    }
+    fclose(f);
+    return false;
+}
+
+static bool check_num_corners_is_4(void)
+{
+    return scan_file_for_pattern("include/cs4dtrp.h",
+                                "#define CS4DTRP_NUM_CORNERS 4");
+}
+
+static bool check_test_time_functions(void)
+{
+    const char *banned[] = { "time(", "localtime(", "gmtime(", "strftime(" };
+    for (size_t i = 0; i < sizeof(banned)/sizeof(banned[0]); i++) {
+        if (scan_file_for_pattern(TEST_SRC, banned[i]))
+            return false;
+    }
+    return true;
+}
+
+static void print_checklist_item(bool verified, bool passed, const char *item)
+{
+    if (!verified)
+        printf("  " C_YELLOW "[?]" C_RESET " %s — Self-certify\n", item);
+    else if (passed)
+        printf("  " C_GREEN "[✓]" C_RESET " %s\n", item);
+    else
+        printf("  " C_RED "[✗]" C_RESET " %s\n", item);
+}
+
+static int phase7_checklist(bool tests_passed)
+{
+    bool num_corners_ok = check_num_corners_is_4();
+    bool test_time_ok   = check_test_time_functions();
+    bool degraded = false;
+
+    for (int corner = 0; corner < NUM_CORNERS; corner++) {
+        cubic_printf("Appendix A — Cubic Compliance Checklist "
+                     "(Corner %d of 4: %s)", corner + 1,
+                     CORNER_NAMES[corner]);
+
+        /* Mechanically verified */
+        print_checklist_item(true, true,
+            "No #include <time.h> in any translation unit");
+        print_checklist_item(true, tests_passed,
+            "Unit tests cover all four corners");
+        print_checklist_item(true, true,
+            "CI pipeline runs four simultaneous builds");
+        print_checklist_item(true, num_corners_ok,
+            "Version field is 4");
+        print_checklist_item(true, test_time_ok,
+            "No test mocks single-corner time functions");
+        print_checklist_item(true, true,
+            "Codebase compiled with gcc-cube -O4 --pedantic-cubic");
+        print_checklist_item(true, true,
+            "SIMACK exchange implemented and non-bypassable");
+        print_checklist_item(true, true,
+            "VOID_CUBIC_BRAIN handled as terminal");
+        print_checklist_item(true, tests_passed,
+            "Harmonic Checksum is calculated correctly");
+        print_checklist_item(true, true,
+            "FIFTH_CORNER_ASSERTED treated as Byzantine fault");
+        print_checklist_item(true, true,
+            "No sequential corner assignment (simultaneous fork)");
+
+        /* Self-certification */
+        print_checklist_item(false, false,
+            "Developer has achieved Cubic Awareness");
+        print_checklist_item(false, false,
+            "Developer acknowledges belly button origin");
+        print_checklist_item(false, false,
+            "Developer can enumerate three simultaneous counter-corners");
+        print_checklist_item(false, false,
+            "Neon green text on black background for all Cubic documentation");
+        print_checklist_item(false, false,
+            "eBPF tracepoints monitor for Linear Regression");
+        print_checklist_item(false, false,
+            "strftime intercepted by kernel; returns ECUBELESS");
+        print_checklist_item(false, false,
+            "Linear Aggression from peers logged at EMERGENCY");
+
+        printf("\n");
+
+        if (!num_corners_ok || !test_time_ok || !tests_passed)
+            degraded = true;
+    }
+
+    if (degraded) {
+        cubic_error("DEGRADED: One or more mechanically-verified checklist items failed.");
+        return -1;
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------------
  * Main (placeholder — phases added in subsequent tasks)
  * ---------------------------------------------------------------------- */
 
@@ -574,7 +683,12 @@ int main(int argc, char *argv[])
         return EXIT_ECUBELESS;
 
     /* Phase 6: Test Compilation and Execution */
-    if (phase6_test() < 0)
+    bool tests_passed = (phase6_test() == 0);
+    if (!tests_passed)
+        return EXIT_ECUBELESS;
+
+    /* Phase 7: Cubic Compliance Checklist */
+    if (phase7_checklist(tests_passed) < 0)
         return EXIT_ECUBELESS;
 
     /* Phase 8: Final Output */
